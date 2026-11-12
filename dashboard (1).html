@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard financiero</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+:root{--bg:#EEF0EC;--line:#E3E6E1;--ink:#111412;--ink2:#5B635D;--g7:#0E5C37;--g6:#16874F;--g1:#DDF1E5;--ol:#E3EBC1;--bl:#DCE7F5;--ye:#FBEFC3;--am:#8A5A00;--r6:#C62828;--r1:#FDE3E3;--fd:'Plus Jakarta Sans',system-ui,sans-serif;--fn:'Inter',system-ui,sans-serif;--star:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.4 var(--fn);padding-bottom:80px}
+[hidden]{display:none!important}
+button,input{font:inherit}
+h1,h2,h3{font-family:var(--fd)}
+.btn{border:0;border-radius:999px;height:48px;padding:0 20px;display:inline-flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
+.dark{background:var(--ink);color:#fff}
+.line{background:#fff;border:1px solid var(--line);color:var(--ink)}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:500;white-space:nowrap}
+.g{background:var(--g1);color:var(--g7)}.r{background:var(--r1);color:var(--r6)}.n{background:var(--bg);color:var(--ink2)}
+.m{background:none;border:1px solid currentColor}
+.big{height:36px;padding:0 14px;font-size:14px}
+#login{min-height:100vh;display:grid;place-items:center;padding:24px}
+.lcard{width:100%;max-width:420px;background:#fff;border-radius:28px;padding:36px;display:grid;gap:16px}
+.lcard h1{font-size:28px}.sub{color:var(--ink2);margin-top:-10px}
+.alt{text-align:center;color:var(--ink2)}
+.lnk{background:none;border:0;color:var(--g7);font-weight:600;cursor:pointer;text-decoration:underline;padding:0}
+.bn.o{background:var(--g1);color:var(--g7)}
+.fld.bad{border:1.5px solid var(--r6)}
+label{display:grid;gap:6px;font-weight:600}
+.fld{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:999px;padding:0 16px;height:48px;font-weight:400}
+.fld>i{color:var(--g6);font-size:18px}
+.fld input{flex:1;border:0;outline:0;background:none;min-width:0}
+.fld button{background:none;border:0;color:var(--ink2);cursor:pointer}
+#dash{display:flex;gap:24px;padding:24px}
+aside{width:216px;flex:none;background:var(--ink);color:#fff;border-radius:24px;padding:24px 16px;display:flex;flex-direction:column;gap:8px;position:sticky;top:24px;height:calc(100vh - 48px);min-height:520px}
+.logo{display:flex;align-items:center;gap:8px;font:600 20px var(--fd);margin:0 8px 20px}
+.logo i{background:var(--g1);color:var(--g7);border-radius:50%;width:32px;height:32px;display:grid;place-items:center}
+.nv{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:999px;color:#8A918B}
+.nv small{display:block;font-size:11px}
+.nv.on{background:var(--g1);color:var(--g7);font-weight:600}
+.me{margin-top:auto;border-top:1px solid #2B302C;padding:14px 8px 0}
+.me>small{font-size:11px;color:#8A918B;display:block;margin-bottom:8px}
+.me div{display:flex;gap:10px;align-items:center}
+.me span small{display:block;font-size:12px;color:#B7BDB8;word-break:break-all}
+.av{width:32px;height:32px;border-radius:50%;background:var(--g1);color:var(--g7);display:grid;place-items:center;font-weight:600;flex:none}
+.main{flex:1;min-width:0;display:grid;gap:24px;align-content:start}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.hi{font-size:36px;font-weight:500;line-height:1.2}.hi span{color:var(--ink2)}
+#sub{color:var(--ink2);margin-top:4px;font-size:14px}
+.hr{display:flex;align-items:center;gap:10px}
+.ctl{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.ctl .sp{flex:1}
+.fw{position:relative}
+.df{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:0 16px 0 8px;height:48px;font-weight:400}
+.df>i{width:32px;height:32px;border-radius:50%;background:var(--g1);color:var(--g6);display:grid;place-items:center}
+.df small{display:block;font-size:11px;color:var(--ink2);line-height:1.1}
+.df input{border:0;outline:0;background:none;font-size:15px}
+.df.bad{border:1.5px solid var(--r6)}
+#fh{position:absolute;top:100%;left:16px;margin-top:3px;color:var(--r6);font-size:12px;white-space:nowrap}
+.bn{display:flex;align-items:center;gap:10px;border-radius:16px;padding:12px 16px;font-weight:500}
+.bn.e{background:var(--r1);color:var(--r6)}.bn.i{background:var(--bl)}
+.bn .btn{margin-left:auto;height:36px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr) 1.5fr;gap:24px}
+.k{position:relative;overflow:hidden;border-radius:24px;padding:20px;display:grid;gap:6px;min-height:168px;align-content:space-between}
+.k::after{content:"";position:absolute;right:-18px;bottom:-22px;width:110px;height:110px;background:currentColor;opacity:.12}
+.kt{display:flex;justify-content:space-between;align-items:center}.kt>i{font-size:20px}
+.k p{color:var(--ink2);font-weight:500}
+.k strong{font:700 28px var(--fn);font-variant-numeric:tabular-nums;position:relative;z-index:1}
+.blue{background:var(--bl)}.blue::after{border-radius:50%}
+.green{background:var(--g1)}.green::after,.final::after{clip-path:var(--star)}
+.yellow{background:var(--ye)}.yellow::after{clip-path:polygon(50% 0,100% 100%,0 100%)}
+.olive{background:var(--ol)}.olive::after{clip-path:polygon(35% 0,65% 0,65% 35%,100% 35%,100% 65%,65% 65%,65% 100%,35% 100%,35% 65%,0 65%,0 35%,35% 35%)}
+.final{background:var(--ink);color:#fff}.final p{color:#B7BDB8}.final strong{font-size:40px}
+.final::after{background:var(--g6);opacity:.9}
+.lock strong{color:var(--ink2);font-size:28px}
+.risk{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:#fff;border-radius:20px;padding:14px 24px}
+.risk h2{font-size:18px;margin-right:8px}
+.card{background:#fff;border-radius:24px;padding:24px;overflow-x:auto}
+.dh{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.dh h2{font-size:18px}.dh small{margin-left:auto;color:var(--ink2)}
+table{width:100%;border-collapse:separate;border-spacing:0;min-width:640px}
+th{background:var(--ink);color:#fff;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:14px 16px;text-align:right}
+th:first-child,td:first-child{text-align:left}
+th:first-child{border-radius:12px 0 0 12px}th:last-child{border-radius:0 12px 12px 0}
+td{padding:18px 16px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;font-size:15px}
+tr:last-child td{border-bottom:0}
+.ac{display:flex;align-items:center;gap:12px;font-weight:500}
+tr.z td{color:#9AA09B}
+.amb{color:var(--am)}.fin{font-weight:700}.fin.red{color:var(--r6)}.fin .chip{margin-left:8px;font-weight:500}
+.a0{background:var(--bl);color:#0C447C}.a1{background:var(--ye);color:var(--am)}
+.msg{text-align:center;padding:48px 16px;display:grid;justify-items:center;gap:8px}
+.msg h3{font-size:18px}.msg p{color:var(--ink2)}
+.shape{width:72px;height:72px;border-radius:50%;background:var(--g1);display:grid;place-items:center;font-size:32px;color:var(--g7)}
+.bi{font-size:40px;color:var(--ink2)}
+.dim{opacity:.4;pointer-events:none}
+#demo{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:6px;flex-wrap:wrap;justify-content:center;background:#fff;border:1px solid var(--line);border-radius:16px;padding:8px;max-width:calc(100% - 24px);z-index:9}
+#demo button{border:0;background:var(--bg);border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(2,1fr)}.final{grid-column:1/-1}}
+@media(max-width:760px){#dash{flex-direction:column}aside{width:auto;position:static;height:auto;min-height:0}.hi{font-size:26px}}
+</style>
+</head>
+<body>
+
+<main id="login" hidden>
+  <form id="lf" class="lcard" novalidate>
+    <h1>Iniciar sesión</h1>
+    <p class="sub">Usa tu usuario de la empresa</p>
+    <div id="lb"></div>
+    <label>Correo electrónico<span class="fld"><i class="ti ti-mail"></i><input id="em" type="email" placeholder="tu.correo@empresa.com" autocomplete="username"></span></label>
+    <label>Contraseña<span class="fld"><i class="ti ti-lock"></i><input id="pw" type="password" placeholder="Ingresa tu contraseña" autocomplete="current-password"><button type="button" data-eye="#pw" aria-label="Mostrar contraseña"><i class="ti ti-eye"></i></button></span></label>
+    <button class="btn dark" type="submit" style="justify-content:center">Entrar</button>
+    <p class="alt">¿Aún no tienes cuenta? <button type="button" class="lnk" data-go="signup">Crear cuenta</button></p>
+  </form>
+  <form id="sf" class="lcard" novalidate hidden>
+    <h1>Crear cuenta</h1>
+    <p class="sub">Registra tu empresa y tu usuario administrador</p>
+    <div id="sb"></div>
+    <label>Nombre de la empresa<span class="fld"><i class="ti ti-building"></i><input id="sco" type="text" placeholder="Mi empresa S.A. de C.V." autocomplete="organization"></span></label>
+    <label>Tu nombre<span class="fld"><i class="ti ti-user"></i><input id="snm" type="text" placeholder="Nombre y apellido" autocomplete="name"></span></label>
+    <label>Correo electrónico<span class="fld"><i class="ti ti-mail"></i><input id="sem" type="email" placeholder="tu.correo@empresa.com" autocomplete="username"></span></label>
+    <label>Contraseña<span class="fld"><i class="ti ti-lock"></i><input id="spw" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password"><button type="button" data-eye="#spw" aria-label="Mostrar contraseña"><i class="ti ti-eye"></i></button></span></label>
+    <label>Confirmar contraseña<span class="fld"><i class="ti ti-lock-check"></i><input id="spw2" type="password" placeholder="Repite tu contraseña" autocomplete="new-password"><button type="button" data-eye="#spw2" aria-label="Mostrar contraseña"><i class="ti ti-eye"></i></button></span></label>
+    <button id="sbtn" class="btn dark" type="submit" style="justify-content:center">Crear cuenta</button>
+    <p class="alt">¿Ya tienes cuenta? <button type="button" class="lnk" data-go="login">Iniciar sesión</button></p>
+  </form>
+</main>
+
+<div id="dash" hidden>
+  <aside>
+    <div class="logo"><i class="ti ti-leaf"></i>finora</div>
+    <div class="nv on"><i class="ti ti-layout-dashboard"></i>Dashboard</div>
+    <div class="nv"><i class="ti ti-wallet"></i><span>Cuentas<small>Próximamente</small></span></div>
+    <div class="nv"><i class="ti ti-file-text"></i><span>Reportes<small>Próximamente</small></span></div>
+    <div class="me"><small>Tu espacio</small><div><span class="av">E</span><span><b id="co">Empresa</b><small id="ue"></small></span></div></div>
+  </aside>
+  <main class="main">
+    <header><!-- Encabezado -->
+      <div><h1 class="hi" id="hi"></h1><p id="sub"></p></div>
+      <div class="hr"><span id="currency" class="chip dark"></span><span class="av" id="av"></span></div>
+    </header>
+    <section class="ctl"><!-- Controles de período -->
+      <div class="fw"><label class="df"><i class="ti ti-calendar"></i><span><small>Desde</small><input id="from" type="date" value="2026-10-26"></span></label><span id="fh"></span></div>
+      <div class="fw"><label class="df"><i class="ti ti-calendar"></i><span><small>Hasta</small><input id="to" type="date" value="2026-10-30"></span></label></div>
+      <button id="go" class="btn dark"><i class="ti ti-refresh"></i>Actualizar</button>
+      <span class="sp"></span>
+      <button id="out" class="btn line"><i class="ti ti-logout"></i>Cerrar sesión</button>
+    </section>
+    <div id="bn"></div>
+    <section id="kpis" class="kpis"></section><!-- Indicadores generales -->
+    <section id="risk" class="risk"></section><!-- Estado de riesgo -->
+    <section id="detail" class="card"></section><!-- Detalle por cuenta -->
+  </main>
+</div>
+
+<div id="demo"></div>
+
+<script>
+const USE_MOCK = false;                       // false = usar el backend real
+const API = 'http://localhost:8000/graphql'; // ajusta el puerto de tu API
+const QL = 'mutation($input:LoginInput!){login(input:$input){token tokenType user{name email}}}';
+const QS = 'mutation($company:String!,$name:String!,$email:String!,$password:String!){createCompanyAdmin(companyName:$company,adminName:$name,adminEmail:$email,adminPassword:$password)}';
+const QB ='query($from:Date!,$to:Date!){generalBalance(fromDate:$from,toDate:$to){companyId currency fromDate toDate openingBalance totalIncome totalExpense profit closingBalance isInRed accountsInRed accounts{accountId accountName isActive openingBalance totalIncome totalExpense profit closingBalance isInRed}}}';
+
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const esc = s => String(s).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
+const fd = iso => { const [, m, d] = iso.split('-'); return +d + ' ' + MES[+m - 1]; };
+// Importes: se formatean como texto, sin convertir a float
+const money = s => { s = String(s); const neg = s[0] === '-'; if (neg) s = s.slice(1);
+  let [i, d = ''] = s.split('.'); d = (d + '00').slice(0, 2);
+  return (neg ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + d; };
+const isZero = s => /^-?0+(\.0+)?$/.test(String(s));
+
+const K = [['Saldo inicial','openingBalance','wallet','blue'],['Ingresos','totalIncome','download','green'],
+           ['Egresos','totalExpense','upload','yellow'],['Profit','profit','trending-up','olive'],
+           ['Saldo final','closingBalance','wallet','final']];
+
+const Z = '0.00';
+const acc = (i,n,o,a,e,p,c,r) => ({accountId:i,accountName:n,isActive:true,openingBalance:o,totalIncome:a,totalExpense:e,profit:p,closingBalance:c,isInRed:r});
+const base = {companyId:1,currency:'MXN',fromDate:'2026-10-26',toDate:'2026-10-30'};
+const zeros = {openingBalance:Z,totalIncome:Z,totalExpense:Z,profit:Z,closingBalance:Z,isInRed:false,accountsInRed:0};
+const SEED = {...base,openingBalance:'1000.00',totalIncome:'3500.00',totalExpense:'2900.00',profit:'600.00',closingBalance:'1600.00',isInRed:false,accountsInRed:1,
+  accounts:[acc(1,'Banco','1000.00','3000.00','2200.00','800.00','1800.00',false),acc(2,'Caja',Z,'500.00','700.00','-200.00','-200.00',true),acc(3,'Ahorro',Z,Z,Z,Z,Z,false)]};
+const EMPTY = {...base,...zeros,accounts:[]};
+const NOMOV = {...base,...zeros,accounts:['Banco','Caja','Ahorro'].map((n,i)=>acc(i+1,n,Z,Z,Z,Z,Z,false))};
+
+let demo = 'ok';
+async function mock(f, t) {
+  await sleep(250);
+  if (demo === 'session') throw {gql:1,msg:'Token expirado'};
+  if (demo === 'denied') throw {gql:1,msg:'Acceso denegado'};
+  if (demo === 'error') throw new TypeError('red');
+  return {...({empty:EMPTY,nomov:NOMOV}[demo] || SEED), fromDate:f, toDate:t};
+}
+
+async function gql(q, v, auth) {
+  const h = {'Content-Type':'application/json'};
+  if (auth) {
+    if (!sessionStorage.tk) throw {gql:1, msg:'Token no proporcionado', status:401};
+    h.Authorization = 'Bearer ' + sessionStorage.tk;
+  }
+  const r = await fetch(API, {method:'POST', headers:h, body:JSON.stringify({query:q, variables:v})});
+  let j;
+  try { j = await r.json(); }
+  catch { throw {status:r.status, msg:'El servidor no devolvió una respuesta GraphQL válida.'}; }
+  if (Array.isArray(j?.errors) && j.errors.length)
+    throw {gql:1, status:r.status, msg:j.errors.map(e => e.message || 'Error GraphQL').join(' ')};
+  if (!r.ok) throw {status:r.status, msg:'No pudimos completar la solicitud.'};
+  if (!j?.data || typeof j.data !== 'object')
+    throw {gql:1, msg:'El servidor devolvió una respuesta GraphQL incompleta.'};
+  return j.data;
+}
+const kind = e => {
+  if (e.status === 401) return 'session';
+  if (e.status === 403) return 'denied';
+  const m = e.gql ? e.msg.toLowerCase() : '';
+  return /token|expir|firma|sesión|autentic|membresía activa/.test(m) ? 'session'
+    : /permiso|denegad|forbidden|permission|rol activo/.test(m) ? 'denied'
+    : /fromdate|todate|fecha|date.*(invalid|represent)/.test(m) ? 'dates' : 'error';
+};
+const loginError = e => /credenciales incorrectas/i.test(e.msg || '')
+  ? 'Correo o contraseña incorrectos.'
+  : /usuario inactivo|membresía activa/i.test(e.msg || '')
+    ? 'Tu usuario no está activo o no tiene una membresía activa. Contacta al administrador.'
+    : e.gql ? 'No pudimos iniciar sesión. Inténtalo de nuevo.' : 'No pudimos conectar con el servidor.';
+function saveSession(r) {
+  if (!r || typeof r.token !== 'string' || !r.token || (r.tokenType && r.tokenType !== 'Bearer'))
+    throw {gql:1, msg:'Respuesta de login incompleta.'};
+  sessionStorage.tk = r.token;
+  sessionStorage.us = JSON.stringify(r.user || {});
+}
+// Se valida la respuesta antes de mostrar importes; nunca se sustituyen errores por ceros.
+function validateBalance(d) {
+  const amount = v => (typeof v === 'string' || typeof v === 'number') && /^-?\d+(\.\d{1,2})?$/.test(String(v));
+  const fields = a => a && K.every(([, k]) => amount(a[k])) && typeof a.isInRed === 'boolean';
+  if (!fields(d) || !/^[A-Z]{3}$/.test(d.currency) || !validDate(d.fromDate) || !validDate(d.toDate)
+      || !Number.isInteger(d.accountsInRed) || d.accountsInRed < 0 || !Array.isArray(d.accounts)
+      || !d.accounts.every(a => fields(a) && typeof a.accountName === 'string'))
+    throw {gql:1, msg:'El servidor devolvió un balance incompleto o inválido.'};
+}
+function validDate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + 'T00:00:00Z');
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+let loadId = 0;
+function clearBalance() {
+  $('#sub').textContent = $('#currency').textContent = '';
+  $('#co').textContent = 'Empresa';
+  $('#kpis').innerHTML = K.map(([l,,ic,c]) => `<article class="k ${c}"><div class="kt"><i class="ti ti-${ic}"></i></div><p>${l}</p><strong>—</strong></article>`).join('');
+  $('#risk').hidden = true;
+  $('#detail').innerHTML = '';
+}
+
+const view = v => { $('#login').hidden = v !== 'login' && v !== 'signup'; $('#lf').hidden = v !== 'login'; $('#sf').hidden = v !== 'signup'; $('#dash').hidden = v !== 'dash'; };
+const go = v => { $('#lb').innerHTML = $('#sb').innerHTML = ''; view(v); };
+const dim = on => ['kpis','risk','detail'].forEach(i => $('#' + i).classList.toggle('dim', on));
+function banner(k, t, retry) {
+  $('#bn').innerHTML = t ? `<div class="bn ${k}"><i class="ti ti-${k==='i'?'info-circle':'alert-circle'}"></i><span>${esc(t)}</span>${retry?'<button id="rt" class="btn line">Reintentar</button>':''}</div>` : '';
+  if (retry) $('#rt').onclick = load;
+}
+function logout(msg) {
+  loadId++;
+  sessionStorage.removeItem('tk'); sessionStorage.removeItem('us');
+  clearBalance(); banner(); dim(false);
+  $('#lb').innerHTML = msg ? `<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(msg)}</span></div>` : '';
+  view('login');
+}
+
+async function load() {
+  const id = ++loadId, token = sessionStorage.tk;
+  const f = $('#from').value, t = $('#to').value, box = $('#from').closest('.df');
+  box.classList.remove('bad'); $('#fh').textContent = ''; banner();
+  clearBalance(); dim(false);
+  if (!validDate(f) || !validDate(t) || !$('#from').validity.valid || !$('#to').validity.valid || f > t) {
+    box.classList.add('bad'); $('#fh').textContent = 'Selecciona fechas válidas: la inicial no puede ser posterior a la final';
+    banner('e', 'Corrige las fechas para actualizar los indicadores.'); return;
+  }
+  $('#detail').innerHTML = '<div class="msg"><p>Cargando balances…</p></div>';
+  try {
+    const d = USE_MOCK ? await mock(f, t) : (await gql(QB, {from:f, to:t}, true)).generalBalance;
+    if (id !== loadId || token !== sessionStorage.tk) return;
+    validateBalance(d); draw(d);
+  } catch (e) {
+    if (id !== loadId || token !== sessionStorage.tk) return;
+    clearBalance();
+    const k = kind(e);
+    if (k === 'session') return logout('Tu sesión expiró o no es válida. Inicia sesión de nuevo.');
+    if (k === 'denied') return denied();
+    if (k === 'dates') return banner('e', 'El servidor rechazó el período. Revisa las fechas seleccionadas.');
+    banner('e', e.gql ? 'El servidor no pudo devolver un balance válido.' : 'No pudimos conectar con el servidor o completar la solicitud.', true);
+  }
+}
+
+function draw(d) {
+  $('#currency').textContent = d.currency;
+  $('#sub').textContent = `Empresa #${d.companyId} · ${d.currency} · Período ${fd(d.fromDate)} – ${fd(d.toDate)} ${d.toDate.slice(0,4)}`;
+  $('#co').textContent = 'Empresa #' + d.companyId;
+  $('#kpis').innerHTML = K.map(([l,k,ic,c]) => `<article class="k ${c}"><div class="kt"><i class="ti ti-${ic}"></i><span class="chip m">${esc(d.currency)}</span></div><p>${l}</p><strong>${money(d[k])}</strong></article>`).join('');
+  const ic = r => r ? 'alert-circle' : 'circle-check';
+  $('#risk').hidden = false;
+  $('#risk').innerHTML = `<h2>Estado de riesgo</h2>
+    <span class="chip big ${d.isInRed?'r':'g'}"><i class="ti ti-${ic(d.isInRed)}"></i>General en rojo: ${d.isInRed?'Sí':'No'}</span>
+    <span class="chip big ${d.accountsInRed?'r':'g'}"><i class="ti ti-${ic(d.accountsInRed)}"></i>Cuentas en rojo: <b>${d.accountsInRed}</b></span>`;
+  detail(d);
+  if (d.accounts.length && d.accounts.every(a => isZero(a.totalIncome) && isZero(a.totalExpense)))
+    banner('i', `No hay movimientos entre ${d.fromDate} y ${d.toDate}. Prueba con otras fechas.`);
+}
+
+function detail(d) {
+  const h = `<div class="dh"><h2>Detalle por cuenta</h2><span class="chip n">${d.accounts.length} cuentas</span><small>Importes en ${esc(d.currency)}</small></div>`;
+  if (!d.accounts.length) { $('#detail').innerHTML = h + '<div class="msg"><span class="shape">+</span><h3>Esta empresa aún no tiene cuentas</h3><p>Cuando se registren cuentas y movimientos, aparecerán aquí.</p></div>'; return; }
+  const rows = d.accounts.map((a, i) => {
+    const z = isZero(a.totalIncome) && isZero(a.totalExpense);
+    return `<tr class="${z?'z':''}"><td><div class="ac"><span class="av a${i%3}">${esc(a.accountName[0])}</span>${esc(a.accountName)}${z?'<span class="chip n">Sin movimientos</span>':''}</div></td>
+      <td>${money(a.openingBalance)}</td><td>${money(a.totalIncome)}</td><td>${money(a.totalExpense)}</td>
+      <td class="${String(a.profit)[0]==='-'?'amb':''}">${money(a.profit)}</td>
+      <td class="fin ${a.isInRed?'red':''}">${money(a.closingBalance)}${a.isInRed?'<span class="chip r">En rojo</span>':''}</td></tr>`;
+  }).join('');
+  $('#detail').innerHTML = h + `<table><thead><tr><th>Cuenta</th><th>Saldo inicial</th><th>Ingresos</th><th>Egresos</th><th>Profit</th><th>Saldo final</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function denied() {                          // sin permiso: nunca mostrar ceros inventados
+  $('#kpis').innerHTML = K.map(([l,,ic,c]) => `<article class="k ${c} lock"><div class="kt"><i class="ti ti-${ic}"></i></div><p>${l}</p><strong><i class="ti ti-lock"></i></strong></article>`).join('');
+  $('#risk').hidden = true;
+  $('#detail').innerHTML = '<div class="msg"><i class="ti ti-lock bi"></i><h3>Acceso denegado</h3><p>Tu usuario no tiene permiso para ver cuentas y movimientos.</p></div>';
+}
+
+function start() {
+  let u;
+  try { u = JSON.parse(sessionStorage.us || '{}') || {}; }
+  catch { return logout('La sesión guardada no es válida. Inicia sesión de nuevo.'); }
+  const n = typeof u.name === 'string' ? u.name : '', h = new Date().getHours();
+  $('#hi').innerHTML = `${h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'}, <span>${esc(n)}</span>`;
+  $('#av').textContent = n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  $('#ue').textContent = u.email || '';     // el correo viene del login (user.email)
+  view('dash'); load();
+}
+
+$('#lf').onsubmit = async e => {
+  e.preventDefault();
+  const em = $('#em').value.trim(), pw = $('#pw').value;
+  const err = t => $('#lb').innerHTML = `<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(t)}</span></div>`;
+  if (!em || !pw) return err('Ingresa tu correo y contraseña.');
+  const btn = $('#lf button[type=submit]');
+  $('#lb').innerHTML = ''; btn.disabled = true;
+  try {
+    let r;
+    if (USE_MOCK) { await sleep(300); demo = 'ok'; r = {token:'demo', user:{name:'Admin Prueba', email:em}}; }
+    else r = (await gql(QL, {input:{email:em, password:pw}})).login;
+    saveSession(r);
+    $('#pw').value = ''; $('#lb').innerHTML = ''; start();
+  } catch (x) { err(loginError(x)); }
+  finally { btn.disabled = false; }
+};
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Sign up: createCompanyAdmin devuelve Boolean (no token), por eso se hace login enseguida
+$('#sf').onsubmit = async e => {
+  e.preventDefault();
+  const co = $('#sco').value.trim(), nm = $('#snm').value.trim(), em = $('#sem').value.trim(),
+        pw = $('#spw').value, pw2 = $('#spw2').value, btn = $('#sbtn');
+  const msg = (k, t) => $('#sb').innerHTML = `<div class="bn ${k}"><i class="ti ti-${k==='o'?'circle-check':'alert-circle'}"></i><span>${esc(t)}</span></div>`;
+  document.querySelectorAll('#sf .fld').forEach(f => f.classList.remove('bad'));
+  const bad = (id, t) => { $(id).closest('.fld').classList.add('bad'); $(id).focus(); msg('e', t); };
+  if (!co) return bad('#sco', 'Ingresa el nombre de tu empresa.');
+  if (!nm) return bad('#snm', 'Ingresa tu nombre.');
+  if (!EMAIL_RE.test(em)) return bad('#sem', 'Ingresa un correo válido.');
+  if (pw.length < 8) return bad('#spw', 'La contraseña debe tener al menos 8 caracteres.');
+  if (pw !== pw2) return bad('#spw2', 'Las contraseñas no coinciden.');
+  $('#sb').innerHTML = ''; btn.disabled = true;
+  let creada = false;
+  try {
+    if (USE_MOCK) {
+      await sleep(300);
+      if (em === 'admin.prueba@example.com') throw {gql:1, msg:'El correo ya está registrado'};
+      creada = true; demo = 'ok'; var r = {token:'demo', user:{name:nm, email:em}};
+    } else {
+      await gql(QS, {company:co, name:nm, email:em, password:pw});
+      creada = true;
+      var r = (await gql(QL, {input:{email:em, password:pw}})).login;
+    }
+    saveSession(r);
+    $('#sf').reset(); start();
+  } catch (x) {
+    if (creada) {                             // cuenta creada pero el login automático falló
+      $('#sf').reset(); $('#em').value = em; go('login');
+      $('#lb').innerHTML = '<div class="bn o"><i class="ti ti-circle-check"></i><span>Cuenta creada. Inicia sesión para continuar.</span></div>';
+    } else msg('e', x.gql ? (/registrad|existe|duplic/i.test(x.msg) ? 'Ese correo ya está registrado. Inicia sesión o usa otro.' : 'No pudimos crear la cuenta.') : 'No pudimos conectar con el servidor.');
+  } finally { btn.disabled = false; }
+};
+document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+document.querySelectorAll('[data-eye]').forEach(b => b.onclick = () => { const p = $(b.dataset.eye); p.type = p.type === 'password' ? 'text' : 'password'; });
+$('#go').onclick = load;
+$('#out').onclick = () => logout();
+
+const DM = [['login','Login'],['signup','Sign up'],['ok','Dashboard'],['empty','Sin cuentas'],['nomov','Sin movimientos'],['dates','Fechas inválidas'],['session','Sesión expirada'],['denied','Sin permiso'],['error','Error de servidor']];
+$('#demo').innerHTML = DM.map(([k,l]) => `<button data-k="${k}">${l}</button>`).join('');
+$('#demo').onclick = e => {
+  const k = e.target.dataset.k; if (!k) return;
+  demo = k;
+  if (k === 'login') return logout();
+  if (k === 'signup') { demo = 'ok'; sessionStorage.clear(); return go('signup'); }
+  if (k === 'session') return logout('Tu sesión expiró o no es válida. Inicia sesión de nuevo.');
+  if (!sessionStorage.tk) { sessionStorage.tk = 'demo'; sessionStorage.us = JSON.stringify({name:'Admin Prueba', email:'admin.prueba@example.com'}); }
+  $('#from').value = k === 'dates' ? '2026-10-30' : '2026-10-26';
+  $('#to').value = k === 'dates' ? '2026-10-26' : '2026-10-30';
+  start();
+};
+if (!USE_MOCK) $('#demo').remove();
+
+sessionStorage.tk ? start() : view('login');
+</script>
+</body>
+</html>
