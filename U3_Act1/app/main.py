@@ -1,21 +1,23 @@
-from fastapi import FastAPI, Depends, Request
-import strawberry
-from strawberry.fastapi import GraphQLRouter
-from typing import Optional, List
-from datetime import datetime, date
-from sqlalchemy.orm import Session
-import bcrypt
-from decimal import Decimal
 import os
 import jwt
+import bcrypt
+from datetime import datetime, date
+from decimal import Decimal
+from typing import Optional, List, Any
+
+from fastapi import FastAPI, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware
+import strawberry
+from strawberry.fastapi import GraphQLRouter
+from sqlalchemy.orm import Session
+from graphql import GraphQLError
+
 from app.database import engine, Base, get_db, SessionLocal
 import app.models as models
 from app.seguridad import leer_actor, crear_token
-from app.fechas import ( normalizar_datetime_utc,ahora_utc_naive,fecha_utc_para_respuesta,)
+from app.fechas import normalizar_datetime_utc, ahora_utc_naive, fecha_utc_para_respuesta
 from app.balances import calcular_balances_por_cuenta, calcular_balance_general
 from app.moneda import validar_monto, esta_en_rojo
-from fastapi.middleware.cors import CORSMiddleware
-from graphql import GraphQLError
 
 app = FastAPI(
     title="Sistema General de Ingresos - API GraphQL",
@@ -26,9 +28,9 @@ app = FastAPI(
 JWT_SECRET = os.getenv("JWT_SECRET", "propio_secreto")
 JWT_ALGORITHM = "HS256"
 
-# TAREA 2 DEL BLOQUE 2: Configuración de CORS
-# Permite que el frontend (Vite en 5173 o Live Server en 5500) consuma /graphql
-#
+# =====================================================================
+# CORS
+# =====================================================================
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -44,46 +46,21 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept"],
 )
-# TAREA 3 DEL BLOQUE 2: Inyección de Contexto (DB + Token JWT)
-# Extrae el header Authorization: Bearer <token> para validar permisos
-#
-async def get_context(
-    request: Request,
-    db: Session = Depends(get_db)
-) -> dict[str, Any]:
+
+# =====================================================================
+# SEGURIDAD Y CONTEXTO
+# =====================================================================
+async def get_context(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
     auth_header = request.headers.get("Authorization", "")
     token = None
     if auth_header.startswith("Bearer "):
         token = auth_header.split(" ", 1)[1].strip()
-    
-    return {
-        "request": request,
-        "db": db,
-        "token": token,
-    }
+    return {"request": request, "db": db, "token": token}
 
-schema = strawberry.Schema(query=Query, mutation=Mutation)
-
-graphql_app = GraphQLRouter(
-    schema,
-    context_getter=get_context,
-    graphiql=True  # Mantiene GraphiQL activo para tus pruebas del Bloque 2
-)
-
-app.include_router(graphql_app, prefix="/graphql")
-### ---
-# =====================================================================
-# TAREA 3 DEL BLOQUE 2: Guard de Autenticación y Permisos de Lectura
-# =====================================================================
-def verify_read_permission(info: Info) -> dict:
-    """
-    Verifica que exista un Bearer token válido, que no haya expirado
-    y que el usuario cuente con los permisos de lectura requeridos.
-    """
+def verify_read_permission(info: strawberry.Info) -> dict:
     token = info.context.get("token")
     if not token:
         raise GraphQLError("No autenticado: Falta el token de autorización (Bearer token).")
-
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
@@ -91,34 +68,29 @@ def verify_read_permission(info: Info) -> dict:
     except jwt.InvalidTokenError:
         raise GraphQLError("Token inválido. Inicia sesión nuevamente.")
 
-    # Verificación de permisos en el payload o en Base de Datos
-    # (Ajusta los códigos de permiso según los que definieron en su Actividad 06/07)
     permissions = payload.get("permissions", [])
     required_permissions = {"accounts:read", "movements:read", "balances:read", "READ"}
     
-    # Si en su BD validan por rol o lista de permisos:
     has_permission = (
-        payload.get("role") in ("ADMIN", "Admin", "READER", "Viewer")
+        payload.get("role") in ("ADMIN", "Admin", "READER", "Viewer", "ADMINISTRADOR", "CONSULTA", "CONTADOR")
         or any(perm in permissions for perm in required_permissions)
     )
     
     if not has_permission:
         raise GraphQLError("Acceso denegado: El usuario no cuenta con permisos de lectura para consultar balances.")
-
     return payload
 
-# --- SEGURIDAD ---
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
-
 
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-
+# =====================================================================
+# DATOS INICIALES (Base de datos)
+# =====================================================================
 Base.metadata.create_all(bind=engine)
 
-# --- DATOS INICIALES: roles y permisos ---
 ROLES_INICIALES = [
     ("ADMINISTRADOR", "Administrador", "Administrador principal de la empresa"),
     ("CONTADOR", "Contador", "Arma cuentas y conceptos, también registra los movimientos"),
@@ -163,6 +135,18 @@ MATRIZ_PERMISOS = {
     ],
 }
 
+def seed_roles_y_permisos():
+    db = SessionLocal()
+    try:
+        if db.query(models.Role).count() == 0:
+            for code, name, desc in ROLES_INICIALES:
+                db.add(models.Role(code=code, name=name, description=desc))
+        if db.query(models.Permission).count() == 0:
+            for code, name, desc in PERMISOS_INICIALES:
+                db.add(models.Permission(code=code, name=name, description=desc))
+        db.commit()
+    finally:
+        db.close()
 
 def seed_role_permissions():
     db = SessionLocal()
@@ -192,44 +176,27 @@ def seed_role_permissions():
     finally:
         db.close()
 
-
-def seed_roles_y_permisos():
-    db = SessionLocal()
-    try:
-        if db.query(models.Role).count() == 0:
-            for code, name, desc in ROLES_INICIALES:
-                db.add(models.Role(code=code, name=name, description=desc))
-        if db.query(models.Permission).count() == 0:
-            for code, name, desc in PERMISOS_INICIALES:
-                db.add(models.Permission(code=code, name=name, description=desc))
-        db.commit()
-    finally:
-        db.close()
-
-
 seed_roles_y_permisos()
 seed_role_permissions()
 
-# --- ENUMS ---
+# =====================================================================
+# ENUMS Y TIPOS
+# =====================================================================
 AccountType = strawberry.enum(models.AccountTypeEnum, name="AccountType")
 ConceptType = strawberry.enum(models.ConceptTypeEnum, name="ConceptType")
 TransactionType = strawberry.enum(models.TransactionTypeEnum, name="TransactionType")
 
-
-# --- TIPOS ---
 @strawberry.type
 class Company:
     id: strawberry.ID
     name: str
     isActive: bool
 
-
 @strawberry.type
 class User:
     id: strawberry.ID
     name: str
     email: str
-
 
 @strawberry.type
 class CompanyUserType:
@@ -238,7 +205,6 @@ class CompanyUserType:
     userId: strawberry.ID
     isAdmin: bool
     isActive: bool
-
 
 @strawberry.type
 class Account:
@@ -257,7 +223,6 @@ class Account:
     updatedAt: datetime
     company: Company
 
-
 @strawberry.type
 class Concept:
     id: strawberry.ID
@@ -270,7 +235,6 @@ class Concept:
     createdAt: datetime
     updatedAt: datetime
 
-
 @strawberry.type
 class AccountConcept:
     id: strawberry.ID
@@ -280,7 +244,6 @@ class AccountConcept:
     createdAt: datetime
     account: Account
     concept: Concept
-
 
 @strawberry.type
 class Transaction:
@@ -301,13 +264,11 @@ class Transaction:
     concept: Concept
     capturedByUser: User
 
-
 @strawberry.type
 class AuthPayload:
     token: str
     tokenType: str
     user: Optional[User]
-
 
 @strawberry.type
 class Role:
@@ -317,7 +278,6 @@ class Role:
     description: Optional[str]
     isActive: bool
 
-
 @strawberry.type
 class Permission:
     id: strawberry.ID
@@ -325,7 +285,6 @@ class Permission:
     name: str
     description: Optional[str]
     isActive: bool
-
 
 @strawberry.type
 class RolePermissionType:
@@ -336,7 +295,6 @@ class RolePermissionType:
     createdAt: datetime
     role: Role
     permission: Permission
-
 
 @strawberry.type
 class AccountBalance:
@@ -349,7 +307,6 @@ class AccountBalance:
     profit: Decimal
     closingBalance: Decimal
     isInRed: bool
-
 
 @strawberry.type
 class GeneralBalance:
@@ -366,7 +323,6 @@ class GeneralBalance:
     accountsInRed: int
     accounts: List[AccountBalance]
 
-
 @strawberry.type
 class RolePermissionUpdate:
     role: Role
@@ -376,74 +332,6 @@ class RolePermissionUpdate:
     finalCount: int
     changed: bool
 
-
-# --- INPUTS ---
-@strawberry.input
-class CreateAccountInput:
-    companyId: strawberry.ID
-    accountType: AccountType
-    name: str
-    bankName: Optional[str] = None
-    accountNumber: Optional[str] = None
-    clabe: Optional[str] = None
-    cardLastDigits: Optional[str] = None
-    shortDescription: Optional[str] = None
-    longDescription: Optional[str] = None
-
-
-@strawberry.input
-class CreateConceptInput:
-    companyId: strawberry.ID
-    conceptType: ConceptType
-    name: str
-    shortDescription: Optional[str] = None
-    longDescription: Optional[str] = None
-
-
-@strawberry.input
-class AssignConceptToAccountInput:
-    accountId: strawberry.ID
-    conceptId: strawberry.ID
-
-
-@strawberry.input
-class CreateTransactionInput:
-    accountId: strawberry.ID
-    conceptId: strawberry.ID
-    transactionType: TransactionType
-    amount: Decimal
-    transactionDate: Optional[datetime] = None
-    shortDescription: Optional[str] = None
-    longDescription: Optional[str] = None
-
-
-@strawberry.input
-class LoginInput:
-    email: str
-    password: str
-
-
-@strawberry.input
-class CreateRoleInput:
-    code: str
-    name: str
-    description: Optional[str]
-
-
-@strawberry.input
-class CreatePermissionInput:
-    code: str
-    name: str
-    description: Optional[str]
-
-
-@strawberry.input
-class SetRolePermissionsInput:
-    roleId: strawberry.ID
-    permissionIds: List[strawberry.ID]
-# =====================================================================
-# DTOs de Salida GraphQL (Alineados exactamente con la Sección 3.4 del PDF)
-# =====================================================================
 @strawberry.type
 class AccountBalanceItemType:
     account_id: int = strawberry.field(name="accountId")
@@ -455,7 +343,6 @@ class AccountBalanceItemType:
     profit: Decimal = strawberry.field(name="profit")
     closing_balance: Decimal = strawberry.field(name="closingBalance")
     is_in_red: bool = strawberry.field(name="isInRed")
-
 
 @strawberry.type
 class GeneralBalanceType:
@@ -472,19 +359,74 @@ class GeneralBalanceType:
     accounts_in_red: int = strawberry.field(name="accountsInRed")
     accounts: list[AccountBalanceItemType]
 
-# --- CONTEXTO ---
-async def get_context(request: Request, db: Session = Depends(get_db)):
-    return {"db": db, "request": request}
+# =====================================================================
+# INPUTS
+# =====================================================================
+@strawberry.input
+class CreateAccountInput:
+    companyId: strawberry.ID
+    accountType: AccountType
+    name: str
+    bankName: Optional[str] = None
+    accountNumber: Optional[str] = None
+    clabe: Optional[str] = None
+    cardLastDigits: Optional[str] = None
+    shortDescription: Optional[str] = None
+    longDescription: Optional[str] = None
 
+@strawberry.input
+class CreateConceptInput:
+    companyId: strawberry.ID
+    conceptType: ConceptType
+    name: str
+    shortDescription: Optional[str] = None
+    longDescription: Optional[str] = None
 
-# --- CONVERTIDORES ---
+@strawberry.input
+class AssignConceptToAccountInput:
+    accountId: strawberry.ID
+    conceptId: strawberry.ID
+
+@strawberry.input
+class CreateTransactionInput:
+    accountId: strawberry.ID
+    conceptId: strawberry.ID
+    transactionType: TransactionType
+    amount: Decimal
+    transactionDate: Optional[datetime] = None
+    shortDescription: Optional[str] = None
+    longDescription: Optional[str] = None
+
+@strawberry.input
+class LoginInput:
+    email: str
+    password: str
+
+@strawberry.input
+class CreateRoleInput:
+    code: str
+    name: str
+    description: Optional[str]
+
+@strawberry.input
+class CreatePermissionInput:
+    code: str
+    name: str
+    description: Optional[str]
+
+@strawberry.input
+class SetRolePermissionsInput:
+    roleId: strawberry.ID
+    permissionIds: List[strawberry.ID]
+
+# =====================================================================
+# CONVERTIDORES
+# =====================================================================
 def role_to_gql(r: models.Role) -> Role:
     return Role(id=r.id, code=r.code, name=r.name, description=r.description, isActive=r.is_active)
 
-
 def permission_to_gql(p: models.Permission) -> Permission:
     return Permission(id=p.id, code=p.code, name=p.name, description=p.description, isActive=p.is_active)
-
 
 def account_to_gql(a: models.Account) -> Account:
     return Account(
@@ -497,7 +439,6 @@ def account_to_gql(a: models.Account) -> Account:
         company=Company(id=a.company.id, name=a.company.name, isActive=a.company.is_active),
     )
 
-
 def concept_to_gql(c: models.Concept) -> Concept:
     return Concept(
         id=c.id, companyId=c.company_id,
@@ -507,14 +448,12 @@ def concept_to_gql(c: models.Concept) -> Concept:
         createdAt=c.created_at, updatedAt=c.updated_at,
     )
 
-
 def account_concept_to_gql(ac: models.AccountConcept) -> AccountConcept:
     return AccountConcept(
         id=ac.id, accountId=ac.account_id, conceptId=ac.concept_id,
         isActive=ac.is_active, createdAt=ac.created_at,
         account=account_to_gql(ac.account), concept=concept_to_gql(ac.concept),
     )
-
 
 def transaction_to_gql(t: models.Transaction) -> Transaction:
     u = t.captured_by_user
@@ -531,7 +470,6 @@ def transaction_to_gql(t: models.Transaction) -> Transaction:
         capturedByUser=User(id=u.id, name=u.name, email=u.email),
     )
 
-
 def balance_to_gql(f: dict) -> AccountBalance:
     return AccountBalance(
         accountId=str(f["accountId"]),
@@ -545,9 +483,7 @@ def balance_to_gql(f: dict) -> AccountBalance:
         isInRed=esta_en_rojo(f["closingBalance"]),
     )
 
-
 def resolver_balance_general(info, fromDate: date, toDate: date) -> GeneralBalance:
-    """Lógica común de generalBalance y de su alias companyBalance."""
     db = info.context["db"]
     actor = leer_actor(db, info)
     exigir_permisos_balance(db, actor["company_user"].id)
@@ -570,8 +506,6 @@ def resolver_balance_general(info, fromDate: date, toDate: date) -> GeneralBalan
         accounts=[balance_to_gql(c) for c in r["accounts"]],
     )
 
-
-# --- PERMISOS ---
 def exigir_permiso(db: Session, company_user_id: int, codigo: str) -> None:
     asignacion = (
         db.query(models.CompanyUserRole)
@@ -598,13 +532,10 @@ def exigir_permiso(db: Session, company_user_id: int, codigo: str) -> None:
         raise Exception(f"El rol no tiene el permiso {codigo}")
 
 def exigir_permisos_balance(db: Session, company_user_id: int) -> None:
-    """Los balances exigen AMBOS permisos de lectura (se consultan en cada petición)."""
     exigir_permiso(db, company_user_id, "accounts.read")
     exigir_permiso(db, company_user_id, "transactions.read")
 
-
 def aplicar_permisos_rol(db: Session, role_id, permission_ids, antes_commit=None):
-    """Operación completa y atómica de permisos de un rol."""
     try:
         ids = [int(value) for value in permission_ids]
         role_id = int(role_id)
@@ -665,8 +596,9 @@ def aplicar_permisos_rol(db: Session, role_id, permission_ids, antes_commit=None
         db.rollback()
         raise
 
-
-# --- QUERIES ---
+# =====================================================================
+# QUERIES
+# =====================================================================
 @strawberry.type
 class Query:
     @strawberry.field
@@ -815,14 +747,12 @@ class Query:
             for m in memberships
         ]
 
-    # --- BALANCES (Actividad 7) ---
     @strawberry.field
     def accountBalance(self, info: strawberry.Info, accountId: strawberry.ID,
                        fromDate: date, toDate: date) -> AccountBalance:
         db = info.context["db"]
         actor = leer_actor(db, info)
         exigir_permisos_balance(db, actor["company_user"].id)
-        # Cuenta inexistente, ID inválido o cuenta de otra empresa: MISMO error.
         try:
             id_cuenta = int(accountId)
         except (TypeError, ValueError):
@@ -844,11 +774,11 @@ class Query:
 
     @strawberry.field
     def companyBalance(self, info: strawberry.Info, fromDate: date, toDate: date) -> GeneralBalance:
-        # Alias de compatibilidad con consultas anteriores a generalBalance.
         return resolver_balance_general(info, fromDate, toDate)
 
-
-# --- MUTATIONS ---
+# =====================================================================
+# MUTATIONS
+# =====================================================================
 @strawberry.type
 class Mutation:
     @strawberry.mutation
@@ -960,7 +890,6 @@ class Mutation:
 
     @strawberry.mutation
     def deactivateAccount(self, info: strawberry.Info, id: strawberry.ID) -> Account:
-        """Soft-delete de cuenta: se marca inactiva; su historial se conserva."""
         db = info.context["db"]
         actor = leer_actor(db, info)
         exigir_permiso(db, actor["company_user"].id, "accounts.write")
@@ -1082,7 +1011,6 @@ class Mutation:
         if input.transactionType.value != concept.concept_type.value:
             raise Exception("El tipo de movimiento debe ser compatible con el tipo de concepto.")
 
-        # La fecha de operación debe traer zona horaria; se guarda en UTC naive.
         if input.transactionDate is not None:
             try:
                 fecha_operacion = normalizar_datetime_utc(input.transactionDate)
@@ -1254,9 +1182,14 @@ class Mutation:
             db.rollback()
             raise
 
-
+# =====================================================================
+# INICIALIZACIÓN DE GRAPHQL (Strawberry)
+# =====================================================================
 schema = strawberry.Schema(query=Query, mutation=Mutation)
-graphql_app = GraphQLRouter(schema, context_getter=get_context)
 
-app = FastAPI(title="Sistema Financiero API - Actividad 7")
+graphql_app = GraphQLRouter(
+    schema, 
+    context_getter=get_context
+)
+
 app.include_router(graphql_app, prefix="/graphql")

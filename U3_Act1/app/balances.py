@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
+from graphql import GraphQLError  # <-- IMPORT AGREGADO AQUÍ
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
@@ -105,6 +106,12 @@ def calcular_balance_general(
       saldo final (no sobre profit) y accountsInRed cuenta cuentas en rojo.
     - Sin cuentas (caso B03) devuelve todo en 0.00 y accountsInRed = 0.
     """
+    # =========================================================================
+    # VALIDACIÓN AGREGADA AQUÍ: Se bloquea la consulta si las fechas están invertidas
+    # =========================================================================
+    if from_date > to_date:
+        raise GraphQLError("El período es inválido: la fecha inicial (fromDate) no puede ser posterior a la fecha final (toDate).")
+
     por_cuenta = calcular_balances_por_cuenta(db, company_id, from_date, to_date)
 
     cuentas = sorted(
