@@ -11,6 +11,7 @@ import strawberry
 from strawberry.fastapi import GraphQLRouter
 from sqlalchemy.orm import Session
 from graphql import GraphQLError
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, get_db, SessionLocal
 import app.models as models
@@ -41,10 +42,10 @@ ALLOWED_ORIGINS = [
 ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=ALLOWED_ORIGINS,  
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
+    allow_methods=["*"],  
+    allow_headers=["*"],
 )
 
 # =====================================================================

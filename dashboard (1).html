@@ -156,7 +156,7 @@ tr.z td{color:#9AA09B}
 
 <script>
 const USE_MOCK = false;                       // false = usar el backend real
-const API = 'http://localhost:8000/graphql'; // ajusta el puerto de tu API
+const API = 'http://127.0.0.1:8000/graphql'; // ajusta el puerto de tu API
 const QL = 'mutation($input:LoginInput!){login(input:$input){token tokenType user{name email}}}';
 const QS = 'mutation($company:String!,$name:String!,$email:String!,$password:String!){createCompanyAdmin(companyName:$company,adminName:$name,adminEmail:$email,adminPassword:$password)}';
 const QB ='query($from:Date!,$to:Date!){generalBalance(fromDate:$from,toDate:$to){companyId currency fromDate toDate openingBalance totalIncome totalExpense profit closingBalance isInRed accountsInRed accounts{accountId accountName isActive openingBalance totalIncome totalExpense profit closingBalance isInRed}}}';
