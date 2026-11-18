@@ -1,6 +1,9 @@
 import os
 import jwt
 import bcrypt
+import re
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Any
@@ -28,6 +31,7 @@ app = FastAPI(
 
 JWT_SECRET = os.getenv("JWT_SECRET", "propio_secreto")
 JWT_ALGORITHM = "HS256"
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 # =====================================================================
 # CORS
@@ -206,6 +210,8 @@ class CompanyUserType:
     userId: strawberry.ID
     isAdmin: bool
     isActive: bool
+    user: User
+    role: Optional["Role"]
 
 @strawberry.type
 class Account:
@@ -419,12 +425,44 @@ class CreatePermissionInput:
 class SetRolePermissionsInput:
     roleId: strawberry.ID
     permissionIds: List[strawberry.ID]
+    
+@strawberry.input
+class CreateCompanyUserInput:
+    name: str
+    email: str
+    password: str
+    roleCode: Optional[str] = None
+    isAdmin: bool = False
 
 # =====================================================================
 # CONVERTIDORES
 # =====================================================================
 def role_to_gql(r: models.Role) -> Role:
     return Role(id=r.id, code=r.code, name=r.name, description=r.description, isActive=r.is_active)
+
+def company_user_to_gql(db: Session, m: models.CompanyUser) -> CompanyUserType:
+    u = db.query(models.User).filter(models.User.id == m.user_id).first()
+    asignacion = (
+        db.query(models.CompanyUserRole)
+        .filter(
+            models.CompanyUserRole.company_user_id == m.id,
+            models.CompanyUserRole.is_active.is_(True),
+        )
+        .first()
+    )
+    rol = (
+        db.query(models.Role).filter(models.Role.id == asignacion.role_id).first()
+        if asignacion else None
+    )
+    return CompanyUserType(
+        id=str(m.id),
+        companyId=str(m.company_id),
+        userId=str(m.user_id),
+        isAdmin=m.is_admin,
+        isActive=m.is_active,
+        user=User(id=str(u.id), name=u.name, email=u.email),
+        role=role_to_gql(rol) if rol else None,
+    )
 
 def permission_to_gql(p: models.Permission) -> Permission:
     return Permission(id=p.id, code=p.code, name=p.name, description=p.description, isActive=p.is_active)
@@ -729,23 +767,31 @@ class Query:
         db = info.context["db"]
         actor = leer_actor(db, info)
         exigir_permiso(db, actor["company_user"].id, "company.users.read")
-        return [User(id=u.id, name=u.name, email=u.email) for u in db.query(models.User).all()]
+        filas = (
+            db.query(models.User)
+            .join(models.CompanyUser, models.CompanyUser.user_id == models.User.id)
+            .filter(models.CompanyUser.company_id == int(actor["company_id"]))
+            .all()
+        )
+        return [User(id=u.id, name=u.name, email=u.email) for u in filas]
 
     @strawberry.field
-    def companyUsers(self, info: strawberry.Info) -> List[CompanyUserType]:
+    def companyUsers(self, info: strawberry.Info,
+                     companyId: Optional[strawberry.ID] = None,
+                     activeOnly: Optional[bool] = None) -> List[CompanyUserType]:
         db = info.context["db"]
         actor = leer_actor(db, info)
         exigir_permiso(db, actor["company_user"].id, "company.users.read")
-        memberships = db.query(models.CompanyUser).all()
+        if companyId is not None and int(companyId) != int(actor["company_id"]):
+            raise Exception("No puedes acceder a otra empresa")
+        q = db.query(models.CompanyUser).filter(
+            models.CompanyUser.company_id == int(actor["company_id"])
+        )
+        if activeOnly:
+            q = q.filter(models.CompanyUser.is_active == True)
         return [
-            CompanyUserType(
-                id=str(m.id),
-                companyId=str(m.company_id),
-                userId=str(m.user_id),
-                isAdmin=m.is_admin,
-                isActive=m.is_active,
-            )
-            for m in memberships
+            company_user_to_gql(db, m)
+            for m in q.order_by(models.CompanyUser.id).all()
         ]
 
     @strawberry.field
@@ -1146,6 +1192,98 @@ class Mutation:
         except Exception:
             db.rollback()
             raise
+        
+    @strawberry.mutation
+    def createCompanyUser(self, info: strawberry.Info,
+                          input: CreateCompanyUserInput) -> CompanyUserType:
+        db = info.context["db"]
+        actor = leer_actor(db, info)
+        exigir_permiso(db, actor["company_user"].id, "company.users.write")
+        company_id = int(actor["company_id"])
+
+        nombre = input.name.strip()
+        correo = input.email.strip().lower()
+        if not nombre:
+            raise Exception("El nombre es obligatorio.")
+        if not EMAIL_RE.match(correo):
+            raise Exception("El correo no tiene un formato válido.")
+        if len(input.password) < 8:
+            raise Exception("La contraseña debe tener al menos 8 caracteres.")
+        if db.query(models.User).filter(func.lower(models.User.email) == correo).first():
+            raise Exception("Ya existe un usuario con ese correo.")
+
+        rol = None
+        if input.roleCode:
+            rol = db.query(models.Role).filter(
+                models.Role.code == input.roleCode.strip().upper(),
+                models.Role.is_active.is_(True),
+            ).first()
+            if rol is None:
+                raise Exception("El rol indicado no existe.")
+
+        quiere_admin = input.isAdmin or (rol is not None and rol.code == "ADMINISTRADOR")
+        hay_admin = db.query(models.CompanyUser).filter(
+            models.CompanyUser.company_id == company_id,
+            models.CompanyUser.is_admin.is_(True),
+            models.CompanyUser.is_active.is_(True),
+        ).first()
+        if quiere_admin and hay_admin:
+            raise Exception(
+                "La empresa ya tiene un administrador principal; no se puede crear un segundo.")
+
+        try:
+            user = models.User(
+                name=nombre, email=correo,
+                hashed_password=get_password_hash(input.password), is_active=True,
+            )
+            db.add(user)
+            db.flush()
+            cu = models.CompanyUser(
+                company_id=company_id, user_id=user.id,
+                is_admin=quiere_admin, is_active=True,
+            )
+            db.add(cu)
+            db.flush()
+            if rol is not None:
+                db.add(models.CompanyUserRole(
+                    company_user_id=cu.id, role_id=rol.id, is_active=True))
+            db.commit()   # usuario, membresia y rol en un solo commit
+        except IntegrityError:
+            db.rollback()
+            raise Exception("Ya existe un usuario con ese correo.")
+        except Exception:
+            db.rollback()
+            raise
+        db.refresh(cu)
+        return company_user_to_gql(db, cu)
+
+    @strawberry.mutation
+    def deactivateCompanyUser(self, info: strawberry.Info,
+                              companyUserId: strawberry.ID) -> CompanyUserType:
+        db = info.context["db"]
+        actor = leer_actor(db, info)
+        exigir_permiso(db, actor["company_user"].id, "company.users.write")
+        try:
+            cu_id = int(companyUserId)
+        except (TypeError, ValueError):
+            raise Exception("Usuario no encontrado en tu empresa.")
+
+        # Solo membresias de la empresa de la sesion
+        cu = db.query(models.CompanyUser).filter(
+            models.CompanyUser.id == cu_id,
+            models.CompanyUser.company_id == int(actor["company_id"]),
+        ).first()
+        if cu is None:
+            raise Exception("Usuario no encontrado en tu empresa.")
+        if cu.id == actor["company_user"].id:
+            raise Exception("No puedes desactivarte a ti mismo.")
+        if cu.is_admin:
+            raise Exception("No se puede desactivar al administrador principal.")
+
+        cu.is_active = False   # baja logica: no se borra nada
+        db.commit()
+        db.refresh(cu)
+        return company_user_to_gql(db, cu)
 
     @strawberry.mutation
     def createCompanyAdmin(self, info: strawberry.Info, companyName: str, adminName: str,
