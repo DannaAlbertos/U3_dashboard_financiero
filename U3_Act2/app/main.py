@@ -1,4 +1,6 @@
 import os
+import hashlib
+import json
 import jwt
 import bcrypt
 from datetime import datetime, date
@@ -10,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import strawberry
 from strawberry.fastapi import GraphQLRouter
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from graphql import GraphQLError
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -394,6 +397,7 @@ class CreateTransactionInput:
     conceptId: strawberry.ID
     transactionType: TransactionType
     amount: Decimal
+    idempotencyKey: str  # obligatorio: va antes de los campos con valor por defecto
     transactionDate: Optional[datetime] = None
     shortDescription: Optional[str] = None
     longDescription: Optional[str] = None
@@ -506,6 +510,46 @@ def resolver_balance_general(info, fromDate: date, toDate: date) -> GeneralBalan
         accountsInRed=r["accountsInRed"],
         accounts=[balance_to_gql(c) for c in r["accounts"]],
     )
+
+# ---------- Idempotencia de createTransaction (U3 - Act 2, Parte 1) ----------
+OPERACION_CREATE_TX = "createTransaction"
+MAX_LLAVE_IDEMPOTENCIA = 100
+
+
+def hash_cuerpo_movimiento(input: "CreateTransactionInput", monto: Decimal) -> str:
+    """SHA-256 determinista del cuerpo del movimiento (JSON con llaves ordenadas)."""
+    fecha = input.transactionDate.isoformat() if input.transactionDate else None
+    cuerpo = {
+        "accountId": str(input.accountId),
+        "conceptId": str(input.conceptId),
+        "transactionType": input.transactionType.value,
+        "amount": str(monto),
+        "transactionDate": fecha,
+        "shortDescription": input.shortDescription,
+        "longDescription": input.longDescription,
+    }
+    texto = json.dumps(cuerpo, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(texto.encode("utf-8")).hexdigest()
+
+
+def buscar_llave(db: Session, company_id: int, llave: str):
+    """Registro de la llave para esa empresa y operación, o None."""
+    return db.query(models.IdempotencyKey).filter(
+        models.IdempotencyKey.company_id == int(company_id),
+        models.IdempotencyKey.operation == OPERACION_CREATE_TX,
+        models.IdempotencyKey.idempotency_key == llave,
+    ).first()
+
+
+def movimiento_de_llave(db: Session, registro, hash_actual: str) -> Transaction:
+    """Devuelve el movimiento original si el cuerpo coincide; si no, rechaza."""
+    if registro.request_hash != hash_actual:
+        raise Exception("La llave de idempotencia ya fue usada con datos distintos.")
+    t = db.query(models.Transaction).filter(
+        models.Transaction.id == registro.transaction_id
+    ).first()
+    return transaction_to_gql(t)
+
 
 def exigir_permiso(db: Session, company_user_id: int, codigo: str) -> None:
     asignacion = (
@@ -981,10 +1025,23 @@ class Mutation:
         if user is None or not user.is_active:
             raise Exception("Usuario inactivo o inexistente")
 
+        llave = (input.idempotencyKey or "").strip()
+        if not llave:
+            raise Exception("La llave de idempotencia es obligatoria.")
+        if len(llave) > MAX_LLAVE_IDEMPOTENCIA:
+            raise Exception(
+                f"La llave de idempotencia no puede exceder {MAX_LLAVE_IDEMPOTENCIA} caracteres.")
+
         try:
             monto_validado = validar_monto(input.amount)
         except ValueError as e:
             raise Exception(str(e))
+
+        # Reintento: si la llave ya existe y el cuerpo coincide, devolver el original.
+        hash_actual = hash_cuerpo_movimiento(input, monto_validado)
+        existente = buscar_llave(db, actor["company_id"], llave)
+        if existente is not None:
+            return movimiento_de_llave(db, existente, hash_actual)
 
         account = db.query(models.Account).filter(
             models.Account.id == input.accountId, models.Account.is_active == True
@@ -1029,8 +1086,24 @@ class Mutation:
             short_description=input.shortDescription,
             long_description=input.longDescription,
         )
-        db.add(db_t)
-        db.commit()
+        try:
+            db.add(db_t)
+            db.flush()  # obtiene db_t.id sin cerrar la transacción
+            db.add(models.IdempotencyKey(
+                company_id=int(actor["company_id"]),
+                operation=OPERACION_CREATE_TX,
+                idempotency_key=llave,
+                request_hash=hash_actual,
+                transaction_id=db_t.id,
+            ))
+            db.commit()  # un solo commit atómico: movimiento + llave
+        except IntegrityError:
+            # Carrera: otra petición con la misma llave ganó; devolver su resultado.
+            db.rollback()
+            ganador = buscar_llave(db, actor["company_id"], llave)
+            if ganador is None:
+                raise
+            return movimiento_de_llave(db, ganador, hash_actual)
         db.refresh(db_t)
         return transaction_to_gql(db_t)
 

@@ -8,6 +8,7 @@ Ejecutar desde Actividad07/:
     pytest -v tests/test_seguridad_balances.py
 """
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -71,6 +72,10 @@ class Entorno:
         self.conceptos = {}
 
     def gql(self, query, variables=None, token="__propio__", header=None):
+        # createTransaction exige idempotencyKey (U3 Act2): una llave única por llamada.
+        if variables and "idempotencyKey" not in variables.get("input", {"idempotencyKey": 1}):
+            variables = {**variables, "input": {**variables["input"],
+                                                "idempotencyKey": uuid.uuid4().hex}}
         tk = self.token if token == "__propio__" else token
         req = _Request(token=tk, header=header)
         ctx = {"db": self.db, "request": req}
