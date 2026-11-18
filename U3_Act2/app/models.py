@@ -210,3 +210,21 @@ class CompanyUserRole(Base):
 
     company_user = relationship("CompanyUser")
     role = relationship("Role")
+
+# Llaves de idempotencia (Unidad III - Actividad 2, Parte 1)
+
+class IdempotencyKey(Base):
+    __tablename__ = "idempotency_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    operation = Column(String(50), nullable=False)
+    idempotency_key = Column(String(100), nullable=False)
+    request_hash = Column(String(64), nullable=False)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "operation", "idempotency_key",
+                         name="uq_idempotency_company_op_key"),
+    )
