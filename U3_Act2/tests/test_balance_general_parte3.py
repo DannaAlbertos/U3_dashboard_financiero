@@ -9,6 +9,7 @@ Los datos de `datos_referencia` son SINTÉTICOS: reproducen los totales esperado
 la lógica de consolidación. Los datos oficiales los define el seed del equipo.
 """
 import os
+import uuid
 from datetime import datetime
 from decimal import Decimal
 
@@ -65,7 +66,11 @@ class Entorno:
         self.token = crear_token(company_user_id, company_id)
 
     def gql(self, query, variables=None):
-        ctx = {"db": self.db, "request": _Request(self.token)}
+        # createTransaction exige idempotencyKey (U3 Act2): una llave única por llamada.
+        if variables and "idempotencyKey" not in variables.get("input", {"idempotencyKey": 1}):
+            variables = {**variables, "input": {**variables["input"],
+                                                "idempotencyKey": uuid.uuid4().hex}}
+        ctx ={"db": self.db, "request": _Request(self.token)}
         return schema.execute_sync(query, variable_values=variables, context_value=ctx)
 
     def ok(self, query, variables=None):

@@ -325,6 +325,7 @@ class CreateTransactionInput:
     conceptId: strawberry.ID
     transactionType: TransactionType
     amount: Decimal
+    idempotencyKey: str
     transactionDate: Optional[datetime] = None
     shortDescription: Optional[str] = None
     longDescription: Optional[str] = None
@@ -674,45 +675,103 @@ class Mutation:
         return True
 
     @strawberry.mutation
-    def createTransaction(self, info: strawberry.Info, input: CreateTransactionInput, actorCompanyUserId: strawberry.ID) -> Transaction:
+    def createTransaction(self, info: strawberry.Info, input: CreateTransactionInput) -> Transaction:
         db = info.context["db"]
-        exigir_permiso(db, int(actorCompanyUserId), "transactions.write")
-        request = info.context["request"]
-        
-        # Validación: Usuario autenticado
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "): raise Exception("El usuario debe estar autenticado. Pasa el token en el header Authorization.")
-        token = auth_header.split(" ")[1]
-        user = get_current_user_from_token(token, db)
-        if not user: raise Exception("Token inválido o expirado.")
-        
-        # Validación: Monto > 0
-        if input.amount <= 0: raise Exception("El monto del movimiento debe ser mayor que cero.")
-        
-        # Validación: Cuenta y concepto existen
-        account = db.query(models.Account).filter(models.Account.id == input.accountId, models.Account.is_active == True).first()
-        if not account: raise Exception("La cuenta no existe.")
-        concept = db.query(models.Concept).filter(models.Concept.id == input.conceptId, models.Concept.is_active == True).first()
-        if not concept: raise Exception("El concepto no existe.")
-        
-        # Validación: Misma empresa
-        if account.company_id != concept.company_id: raise Exception("La cuenta, el concepto y el usuario deben corresponder a la misma empresa.")
-        user_in_company = db.query(models.CompanyUser).filter(models.CompanyUser.user_id == user.id, models.CompanyUser.company_id == account.company_id).first()
-        if not user_in_company: raise Exception("La cuenta, el concepto y el usuario deben corresponder a la misma empresa.")
-        
-        # Validación: Concepto permitido
-        allowed = db.query(models.AccountConcept).filter(models.AccountConcept.account_id == account.id, models.AccountConcept.concept_id == concept.id, models.AccountConcept.is_active == True).first()
-        if not allowed: raise Exception("El concepto no está permitido para la cuenta seleccionada.")
-        
-        # Validación: Tipo compatible
-        if input.transactionType.value != concept.concept_type.value: raise Exception("El tipo de movimiento debe ser compatible con el tipo de concepto.")
-        
-        db_t = models.Transaction(account_id=input.accountId, concept_id=input.conceptId, transaction_type=input.transactionType.value, amount=input.amount, transaction_date=input.transactionDate or datetime.utcnow(), captured_by=user.id, short_description=input.shortDescription, long_description=input.longDescription)
-        db.add(db_t)
-        db.commit()
+        actor = leer_actor(db, info)
+        exigir_permiso(db, actor["company_user"].id, "transactions.write")
+        user = db.query(models.User).filter(models.User.id == actor["company_user"].user_id).first()
+        if user is None or not user.is_active:
+            raise Exception("Usuario inactivo o inexistente")
+
+        # Idempotencia: la llave es obligatoria y se compara sin espacios sobrantes.
+        llave = (input.idempotencyKey or "").strip()
+        if not llave:
+            raise Exception("La llave de idempotencia es obligatoria.")
+        if len(llave) > LONGITUD_MAXIMA_LLAVE:
+            raise Exception(
+                f"La llave de idempotencia no puede exceder {LONGITUD_MAXIMA_LLAVE} caracteres."
+            )
+
+        try:
+            monto_validado = validar_monto(input.amount)
+        except ValueError as e:
+            raise Exception(str(e))
+
+        # Idempotencia: si la llave ya existe en esta empresa, es un reintento.
+        company_id = int(actor["company_id"])
+        hash_actual = hash_cuerpo_movimiento(input, monto_validado)
+        registro = buscar_llave(db, company_id, llave)
+        if registro is not None:
+            return movimiento_de_llave(db, registro, hash_actual)
+
+        account = db.query(models.Account).filter(
+            models.Account.id == input.accountId, models.Account.is_active == True
+        ).first()
+        if not account:
+            raise Exception("La cuenta no existe.")
+        concept = db.query(models.Concept).filter(
+            models.Concept.id == input.conceptId, models.Concept.is_active == True
+        ).first()
+        if not concept:
+            raise Exception("El concepto no existe.")
+
+        if (int(account.company_id) != int(actor["company_id"])
+                or int(concept.company_id) != int(actor["company_id"])):
+            raise Exception("La cuenta y el concepto deben pertenecer a tu empresa")
+
+        allowed = db.query(models.AccountConcept).filter(
+            models.AccountConcept.account_id == account.id,
+            models.AccountConcept.concept_id == concept.id,
+            models.AccountConcept.is_active == True,
+        ).first()
+        if not allowed:
+            raise Exception("El concepto no está permitido para la cuenta seleccionada.")
+
+        if input.transactionType.value != concept.concept_type.value:
+            raise Exception("El tipo de movimiento debe ser compatible con el tipo de concepto.")
+
+        if input.transactionDate is not None:
+            try:
+                fecha_operacion = normalizar_datetime_utc(input.transactionDate)
+            except ValueError as e:
+                raise Exception(str(e))
+        else:
+            fecha_operacion = ahora_utc_naive()
+
+        db_t = models.Transaction(
+            account_id=input.accountId, concept_id=input.conceptId,
+            transaction_type=input.transactionType.value, amount=monto_validado,
+            transaction_date=fecha_operacion,
+            captured_at=ahora_utc_naive(),
+            captured_by=user.id,
+            short_description=input.shortDescription,
+            long_description=input.longDescription,
+        )
+        # Movimiento y llave se guardan en UN solo commit: o quedan los dos o ninguno.
+        try:
+            db.add(db_t)
+            db.flush()  # asigna db_t.id sin cerrar la transacción
+            db.add(models.IdempotencyKey(
+                company_id=company_id,
+                operation=OPERACION_CREAR_MOVIMIENTO,
+                idempotency_key=llave,
+                request_hash=hash_actual,
+                transaction_id=db_t.id,
+            ))
+            db.commit()
+        except IntegrityError:
+            # Carrera: otra petición con la misma llave ganó el INSERT.
+            db.rollback()
+            registro = buscar_llave(db, company_id, llave)
+            if registro is None:
+                raise
+            return movimiento_de_llave(db, registro, hash_actual)
+        except Exception:
+            db.rollback()
+            raise
         db.refresh(db_t)
-        
-        return Query.transactions(None, info, accountId=input.accountId, actorCompanyUserId=actorCompanyUserId)[-1]
+        return transaction_to_gql(db_t)
+
 
     @strawberry.mutation
     def deleteTransaction(self, info: strawberry.Info, id: strawberry.ID) -> Transaction:
