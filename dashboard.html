@@ -320,6 +320,7 @@ const QA_NEW = `mutation($input:CreateAccountInput!){createAccount(input:$input)
 
 // Conceptos
 const QC = `query($companyId:ID!){concepts(companyId:$companyId){id name conceptType isActive shortDescription}}`;
+const QC_ACCESS = `query{conceptAccess{companyId canRead canWrite}}`;
 const QC_NEW = `mutation($input:CreateConceptInput!){createConcept(input:$input){id name conceptType isActive}}`;
 const QAC = `query($accountId:ID!){accountConcepts(accountId:$accountId){id conceptId isActive concept{id name conceptType}}}`;
 const QAC_ADD = `mutation($input:AssignConceptToAccountInput!){assignConceptToAccount(input:$input){id conceptId isActive concept{id name conceptType}}}`;
@@ -399,7 +400,14 @@ async function fetchPerms(){
       perms.push('accounts.write', 'concepts.write');
     }
   } catch {}
-  savePerms(perms);
+  // Solo Conceptos usa sus permisos efectivos; los otros módulos conservan su flujo.
+  const efectivos = perms.filter(p=>!p.startsWith('concepts.'));
+  try{
+    const conceptPerms = (await gql(QC_ACCESS)).conceptAccess;
+    if(conceptPerms.canRead) efectivos.push('concepts.read');
+    if(conceptPerms.canWrite) efectivos.push('concepts.write');
+  } catch {} // Un fallo de Conceptos no bloquea los permisos de los otros módulos.
+  savePerms(efectivos);
 }
 
 /* ===================================================================
@@ -699,31 +707,68 @@ $('#ac-save').onclick = async () => {
 let _conceptos = [];
 let _acConceptos = []; // conceptos de la cuenta seleccionada
 let _coFiltroTipo = 'ALL';
+let _coLoadId = 0;
+let _acLoadId = 0;
+const conceptError = x => x.gql ? x.msg : 'No se pudo conectar con GraphQL. Intenta nuevamente.';
+
+async function refreshConceptAccess(){
+  const token=getToken();
+  const access = (await gql(QC_ACCESS)).conceptAccess;
+  if(token!==getToken()) throw new Error('La sesión cambió.');
+  const perms = [...userPerms].filter(p=>!p.startsWith('concepts.'));
+  if(access.canRead) perms.push('concepts.read');
+  if(access.canWrite) perms.push('concepts.write');
+  savePerms(perms);
+  if(!access.canWrite) $('#co-form').hidden=true;
+  applyPermVisibility($('#v-conceptos'));
+  return access;
+}
 
 async function loadConceptos(){
-  const companyId = getCompanyId()||'1';
+  const id = ++_coLoadId;
+  const token=getToken();
+  ++_acLoadId;
+  _conceptos=[]; _acConceptos=[];
+  $('#co-acc').innerHTML=''; $('#co-pick').innerHTML='';
+  $('#co-assigned').innerHTML=''; $('#co-amsg').innerHTML='';
+  $('#co-form').hidden=true;
   $('#co-list').innerHTML='<div class="msg"><h3 style="color:var(--ink2)">Cargando…</h3></div>';
   $('#co-err').innerHTML='';
   try{
-    const [cData, aData] = await Promise.all([
+    const access = await refreshConceptAccess();
+    if(id!==_coLoadId||token!==getToken()) return;
+    if(!access.canRead) throw Object.assign(new Error('Sin permiso para ver conceptos.'),{gql:true,msg:'Sin permiso para ver conceptos.'});
+    const companyId = access.companyId;
+    const [catalogo, cuentasResult] = await Promise.allSettled([
       gql(QC, {companyId}),
       gql(QA, {companyId}),
     ]);
-    _conceptos = cData.concepts||[];
-    const cuentas = aData.accounts||[];
+    if(id!==_coLoadId||token!==getToken()) return;
+    if(catalogo.status==='rejected') throw catalogo.reason;
+    _conceptos = catalogo.value.concepts||[];
     renderConceptos();
+    renderPickConceptos();
+    if(cuentasResult.status==='rejected'){
+      const x=cuentasResult.reason;
+      $('#co-assigned').innerHTML=`<div class="bn e"><span>${esc(conceptError(x))}</span></div>`;
+      return;
+    }
+    const cuentas = (cuentasResult.value.accounts||[]).filter(a=>a.isActive);
     // Poblar selector de cuentas
     const sel=$('#co-acc');
-    sel.innerHTML=cuentas.filter(a=>a.isActive).map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+    sel.innerHTML=cuentas.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
     // Poblar selector de conceptos a asignar
     renderPickConceptos();
-    if(cuentas.length) loadConceptosDeCuenta(sel.value);
+    if(cuentas.length) await loadConceptosDeCuenta(sel.value);
+    else $('#co-assigned').innerHTML='<p>No hay cuentas activas disponibles.</p>';
   } catch(x){
+    if(id!==_coLoadId||token!==getToken()) return;
+    savePerms([...userPerms].filter(p=>!p.startsWith('concepts.')));
     $('#co-list').innerHTML='';
     if(x.gql&&/permiso|acceso|denegado/i.test(x.msg)){
       $('#co-err').innerHTML=`<div class="bn e"><i class="ti ti-lock"></i><span>Sin permiso para ver conceptos.</span></div>`;
     } else {
-      $('#co-err').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.message)}</span></div>`;
+      $('#co-err').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(conceptError(x))}</span></div>`;
     }
   }
   applyPermVisibility($('#v-conceptos'));
@@ -755,14 +800,21 @@ function renderConceptos(){
 }
 
 async function loadConceptosDeCuenta(accountId){
-  if(!accountId) return;
+  const id=++_acLoadId;
+  const token=getToken();
+  _acConceptos=[];
+  if(!accountId){ $('#co-assigned').innerHTML='<p>Selecciona una cuenta.</p>'; return false; }
   $('#co-assigned').innerHTML='<p style="color:var(--ink2);font-size:13px">Cargando…</p>';
   try{
     const data=await gql(QAC,{accountId});
+    if(id!==_acLoadId||token!==getToken()||accountId!==$('#co-acc').value) return false;
     _acConceptos=(data.accountConcepts||[]).filter(ac=>ac.isActive);
     renderConceptosDeCuenta();
-  } catch{
-    $('#co-assigned').innerHTML='<p style="color:var(--r6);font-size:13px">Error al cargar conceptos.</p>';
+    return true;
+  } catch(x){
+    if(id!==_acLoadId||token!==getToken()||accountId!==$('#co-acc').value) return false;
+    $('#co-assigned').innerHTML=`<div class="bn e"><span>${esc(conceptError(x))}</span></div>`;
+    return false;
   }
 }
 
@@ -782,32 +834,34 @@ function renderConceptosDeCuenta(){
   if(puedeEscribir){
     $('#co-assigned').querySelectorAll('[data-rm-concept]').forEach(btn=>{
       btn.onclick=async()=>{
+        if(!hasPerms('concepts.write')) return;
         const accountId=$('#co-acc').value, conceptId=btn.dataset.rmConcept;
+        btn.disabled=true;
         try{
           await gql(QAC_DEL,{accountId,conceptId});
           await loadConceptosDeCuenta(accountId);
           $('#co-amsg').innerHTML='';
         } catch(x){
-          $('#co-amsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.msg||x.message)}</span></div>`;
-        }
+          $('#co-amsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(conceptError(x))}</span></div>`;
+        } finally{ btn.disabled=false; }
       };
     });
   }
 }
 
-$('#co-acc').onchange=()=>loadConceptosDeCuenta($('#co-acc').value);
+$('#co-acc').onchange=()=>{ $('#co-amsg').innerHTML=''; return loadConceptosDeCuenta($('#co-acc').value); };
 
 $('#co-assign').onclick=async()=>{
+  if(!hasPerms('concepts.write')) return;
   const accountId=$('#co-acc').value, conceptId=$('#co-pick').value;
   if(!accountId||!conceptId){ $('#co-amsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>Selecciona cuenta y concepto.</span></div>`; return; }
   $('#co-assign').disabled=true;
   try{
     await gql(QAC_ADD,{input:{accountId,conceptId}});
-    await loadConceptosDeCuenta(accountId);
+    if(!await loadConceptosDeCuenta(accountId)) return;
     $('#co-amsg').innerHTML=`<div class="bn o"><i class="ti ti-circle-check"></i><span>Concepto asignado.</span></div>`;
-    setTimeout(()=>{ $('#co-amsg').innerHTML=''; },3000);
   } catch(x){
-    $('#co-amsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.msg||x.message)}</span></div>`;
+    $('#co-amsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(conceptError(x))}</span></div>`;
   } finally{ $('#co-assign').disabled=false; }
 };
 
@@ -822,18 +876,19 @@ $$('[data-ctf]').forEach(b=>b.onclick=function(){
   renderConceptos();
 });
 
-$('#co-new').onclick=()=>{ $('#co-form').hidden=false; $('#co-name').focus(); $('#co-fmsg').innerHTML=''; };
+$('#co-new').onclick=()=>{ if(!hasPerms('concepts.write')) return; $('#co-form').hidden=false; $('#co-name').focus(); $('#co-fmsg').innerHTML=''; };
 $('#co-cancel').onclick=()=>{ $('#co-form').hidden=true; $('#co-name').value=''; $('#co-desc').value=''; };
 $('#co-save').onclick=async()=>{
-  const companyId=getCompanyId()||'1', name=$('#co-name').value.trim(), conceptType=$('#co-type').value, desc=$('#co-desc').value.trim()||null;
+  if(!hasPerms('concepts.write')) return;
+  const name=$('#co-name').value.trim(), conceptType=$('#co-type').value, desc=$('#co-desc').value.trim()||null;
   if(!name){ $('#co-fmsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>El nombre es obligatorio.</span></div>`; return; }
   $('#co-save').disabled=true;
   try{
-    await gql(QC_NEW,{input:{companyId,conceptType,name,shortDescription:desc}});
+    await gql(QC_NEW,{input:{conceptType,name,shortDescription:desc}});
     $('#co-form').hidden=true; $('#co-name').value=''; $('#co-desc').value='';
     await loadConceptos();
   } catch(x){
-    $('#co-fmsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.msg||x.message)}</span></div>`;
+    $('#co-fmsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(conceptError(x))}</span></div>`;
   } finally{ $('#co-save').disabled=false; }
 };
 

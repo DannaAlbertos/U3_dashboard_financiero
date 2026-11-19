@@ -242,6 +242,12 @@ class Account:
     company: Company
 
 @strawberry.type
+class ConceptAccess:
+    companyId: strawberry.ID
+    canRead: bool
+    canWrite: bool
+
+@strawberry.type
 class Concept:
     id: strawberry.ID
     companyId: strawberry.ID
@@ -386,9 +392,9 @@ class CreateAccountInput:
 
 @strawberry.input
 class CreateConceptInput:
-    companyId: strawberry.ID
     conceptType: ConceptType
     name: str
+    companyId: Optional[strawberry.ID] = None
     shortDescription: Optional[str] = None
     longDescription: Optional[str] = None
 
@@ -673,20 +679,40 @@ class Query:
         return [account_to_gql(a) for a in q.all()]
 
     @strawberry.field
-    def concepts(self, info: strawberry.Info, companyId: strawberry.ID,
+    def concepts(self, info: strawberry.Info, companyId: Optional[strawberry.ID] = None,
                  conceptType: Optional[ConceptType] = None,
                  activeOnly: Optional[bool] = None) -> List[Concept]:
         db = info.context["db"]
         actor = leer_actor(db, info)
         exigir_permiso(db, actor["company_user"].id, "concepts.read")
-        if int(companyId) != int(actor["company_id"]):
+        if companyId is not None and int(companyId) != int(actor["company_id"]):
             raise Exception("No puedes acceder a otra empresa")
-        q = db.query(models.Concept).filter(models.Concept.company_id == companyId)
+        q = db.query(models.Concept).filter(models.Concept.company_id == actor["company_id"])
         if conceptType:
             q = q.filter(models.Concept.concept_type == conceptType.value)
         if activeOnly:
             q = q.filter(models.Concept.is_active == True)
         return [concept_to_gql(c) for c in q.all()]
+
+    @strawberry.field
+    def conceptAccess(self, info: strawberry.Info) -> ConceptAccess:
+        """Permisos efectivos del módulo, sin depender de consultar Usuarios."""
+        db = info.context["db"]
+        actor = leer_actor(db, info)
+        permisos = {
+            codigo for (codigo,) in db.query(models.Permission.code)
+            .join(models.RolePermission)
+            .filter(
+                models.RolePermission.role_id == actor["role_id"],
+                models.RolePermission.is_active.is_(True),
+                models.Permission.is_active.is_(True),
+            ).all()
+        }
+        return ConceptAccess(
+            companyId=str(actor["company_id"]),
+            canRead="concepts.read" in permisos,
+            canWrite="concepts.write" in permisos,
+        )
 
     @strawberry.field
     def accountConcepts(self, info: strawberry.Info, accountId: strawberry.ID) -> List[AccountConcept]:
@@ -699,6 +725,8 @@ class Query:
         q = db.query(models.AccountConcept).filter(
             models.AccountConcept.account_id == accountId,
             models.AccountConcept.is_active == True,
+        ).join(models.Concept).filter(
+            models.Concept.company_id == actor["company_id"],
         )
         return [account_concept_to_gql(ac) for ac in q.all()]
 
@@ -996,17 +1024,20 @@ class Mutation:
         db = info.context["db"]
         actor = leer_actor(db, info)
         exigir_permiso(db, actor["company_user"].id, "concepts.write")
-        if int(input.companyId) != int(actor["company_id"]):
+        if input.companyId is not None and int(input.companyId) != int(actor["company_id"]):
             raise Exception("No puedes acceder a otra empresa")
+        nombre = input.name.strip()
+        if not nombre:
+            raise Exception("El nombre del concepto es obligatorio")
         existing = db.query(models.Concept).filter(
-            models.Concept.company_id == input.companyId,
-            models.Concept.name == input.name,
+            models.Concept.company_id == actor["company_id"],
+            models.Concept.name == nombre,
         ).first()
         if existing:
             raise Exception("El concepto ya existe para esta empresa")
         db_c = models.Concept(
-            company_id=input.companyId, concept_type=input.conceptType.value,
-            name=input.name, short_description=input.shortDescription,
+            company_id=actor["company_id"], concept_type=input.conceptType.value,
+            name=nombre, short_description=input.shortDescription,
             long_description=input.longDescription,
         )
         db.add(db_c)
@@ -1051,6 +1082,9 @@ class Mutation:
         cuenta = db.query(models.Account).filter(models.Account.id == accountId).first()
         if cuenta is None or int(cuenta.company_id) != int(actor["company_id"]):
             raise Exception("La cuenta no pertenece a tu empresa")
+        concepto = db.query(models.Concept).filter(models.Concept.id == conceptId).first()
+        if concepto is None or int(concepto.company_id) != int(actor["company_id"]):
+            raise Exception("El concepto no pertenece a tu empresa")
         ac = db.query(models.AccountConcept).filter(
             models.AccountConcept.account_id == accountId,
             models.AccountConcept.concept_id == conceptId,
