@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>finora · Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+:root{--bg:#EEF0EC;--line:#E3E6E1;--ink:#111412;--ink2:#5B635D;--g7:#0E5C37;--g6:#16874F;--g1:#DDF1E5;--ol:#E3EBC1;--bl:#DCE7F5;--ye:#FBEFC3;--am:#8A5A00;--r6:#C62828;--r1:#FDE3E3;--fd:'Plus Jakarta Sans',system-ui,sans-serif;--fn:'Inter',system-ui,sans-serif;--star:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.4 var(--fn);padding-bottom:80px}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--fd)}
+.btn{border:0;border-radius:999px;height:48px;padding:0 20px;display:inline-flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
+.btn:disabled{opacity:.5;cursor:default}
+.sm{height:36px;padding:0 14px;font-size:13px}
+.dark{background:var(--ink);color:#fff}.line-btn{background:#fff;border:1px solid var(--line);color:var(--ink)}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:500;white-space:nowrap}
+.g{background:var(--g1);color:var(--g7)}.r{background:var(--r1);color:#9B1C1C}.n{background:var(--bg);color:#4A524C}.y{background:var(--ye);color:#6B4600}.b{background:var(--bl);color:#0C447C}
+.chip.dark{background:var(--ink);color:#fff;font-size:11px}
+/* LOGIN */
+#login{min-height:100vh;display:grid;place-items:center;padding:24px}
+.lcard{width:100%;max-width:420px;background:#fff;border-radius:28px;padding:36px;display:grid;gap:16px}
+.lcard h1{font-size:28px}.sub{color:var(--ink2);margin-top:-10px}.alt{text-align:center;color:var(--ink2)}
+.lnk{background:none;border:0;color:var(--g7);font-weight:600;cursor:pointer;text-decoration:underline;padding:0}
+.fld.bad,.inp.bad{border:1.5px solid var(--r6)}
+label{display:grid;gap:6px;font-weight:600}
+.fld{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:999px;padding:0 16px;height:48px;font-weight:400}
+.fld>i{color:var(--g6);font-size:18px}.fld input{flex:1;border:0;outline:0;background:none;min-width:0}
+.fld button{background:none;border:0;color:var(--ink2);cursor:pointer}
+.bn{display:flex;align-items:center;gap:10px;border-radius:16px;padding:12px 16px;font-weight:500}
+.bn.e{background:var(--r1);color:#9B1C1C}.bn.i{background:var(--bl)}.bn.o{background:var(--g1);color:var(--g7)}
+/* LAYOUT */
+#dash{display:flex;gap:24px;padding:24px}
+aside{width:232px;flex:none;background:var(--ink);color:#fff;border-radius:24px;padding:24px 16px;display:flex;flex-direction:column;gap:4px;position:sticky;top:24px;height:calc(100vh - 48px);min-height:560px;overflow-y:auto}
+.logo{display:flex;align-items:center;gap:8px;font:600 20px var(--fd);margin:0 8px 20px}
+.logo i{background:var(--g1);color:var(--g7);border-radius:50%;width:32px;height:32px;display:grid;place-items:center}
+.sec{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6F776F;margin:12px 12px 4px}
+.nv{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:999px;color:#9AA19B;border:0;background:none;width:100%;text-align:left;cursor:pointer;min-height:44px}
+.nv:hover{color:#fff}.nv.on{background:var(--g1);color:var(--g7);font-weight:600}
+.me{margin-top:auto;border-top:1px solid #2B302C;padding:14px 8px 0;flex-shrink:0}
+.me>small{font-size:11px;color:#8A918B;display:block;margin-bottom:8px}
+.me>div{display:flex;gap:10px;align-items:center}
+.me span small{display:block;font-size:12px;color:#B7BDB8;word-break:break-all}
+.av{width:32px;height:32px;border-radius:50%;background:var(--g1);color:var(--g7);display:grid;place-items:center;font-weight:600;flex:none;font-size:13px}
+.main{flex:1;min-width:0;display:grid;gap:24px;align-content:start}
+.view{display:grid;gap:24px;align-content:start}
+/* FINANCIERO */
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.hi{font-size:36px;font-weight:500;line-height:1.2}.hi span{color:var(--ink2)}
+.ctl{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.ctl .sp{flex:1}
+.fw{position:relative}
+.df{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:0 16px 0 8px;height:48px;font-weight:400}
+.df>i{width:32px;height:32px;border-radius:50%;background:var(--g1);color:var(--g6);display:grid;place-items:center}
+.df small{display:block;font-size:11px;color:var(--ink2);line-height:1.1}.df input{border:0;outline:0;background:none;font-size:15px}
+.df.bad{border:1.5px solid var(--r6)}
+#fh{position:absolute;top:100%;left:16px;margin-top:3px;color:var(--r6);font-size:12px;white-space:nowrap}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr) 1.5fr;gap:24px}
+.k{position:relative;overflow:hidden;border-radius:24px;padding:20px;display:grid;gap:6px;min-height:168px;align-content:space-between}
+.k::after{content:"";position:absolute;right:-18px;bottom:-22px;width:110px;height:110px;background:currentColor;opacity:.12}
+.kt{display:flex;justify-content:space-between;align-items:center}.kt>i{font-size:20px}
+.k p{color:var(--ink2);font-weight:500}
+.k strong{font:700 28px var(--fn);font-variant-numeric:tabular-nums;position:relative;z-index:1}
+.blue{background:var(--bl)}.blue::after{border-radius:50%}
+.green{background:var(--g1)}.green::after,.final::after{clip-path:var(--star)}
+.yellow{background:var(--ye)}.yellow::after{clip-path:polygon(50% 0,100% 100%,0 100%)}
+.olive{background:var(--ol)}.olive::after{clip-path:polygon(35% 0,65% 0,65% 35%,100% 35%,100% 65%,65% 65%,65% 100%,35% 100%,35% 65%,0 65%,0 35%,35% 35%)}
+.final{background:var(--ink);color:#fff}.final p{color:#B7BDB8}.final strong{font-size:40px}
+.final::after{background:var(--g6);opacity:.9}
+.lock strong{color:var(--ink2);font-size:28px}
+.risk{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:#fff;border-radius:20px;padding:14px 24px}
+.risk h2{font-size:18px;margin-right:8px}
+.card{background:#fff;border-radius:24px;padding:24px;overflow-x:auto}
+.dh{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.dh h2{font-size:18px}.dh small{margin-left:auto;color:var(--ink2)}
+table{width:100%;border-collapse:separate;border-spacing:0;min-width:600px}
+th{background:var(--ink);color:#fff;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:14px 16px;text-align:right}
+th.l,td.l{text-align:left}
+th:first-child,td:first-child{text-align:left}
+th:first-child{border-radius:12px 0 0 12px}th:last-child{border-radius:0 12px 12px 0}
+td{padding:16px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;font-size:15px}
+tr:last-child td{border-bottom:0}
+.ac{display:flex;align-items:center;gap:12px;font-weight:500}
+tr.z td{color:#9AA09B}.amb{color:var(--am)}.fin{font-weight:700}.fin.red{color:var(--r6)}.fin .chip{margin-left:8px;font-weight:500}
+.a0{background:var(--bl);color:#0C447C}.a1{background:var(--ye);color:var(--am)}
+.msg{text-align:center;padding:48px 16px;display:grid;justify-items:center;gap:8px}
+.msg h3{font-size:18px}.msg p{color:var(--ink2)}
+.shape{width:72px;height:72px;border-radius:50%;background:var(--g1);display:grid;place-items:center;font-size:32px;color:var(--g7)}
+.bi{font-size:40px;color:var(--ink2)}
+/* ADMIN */
+.vh{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.vh h2{font-size:22px}.vh .sp{flex:1}
+.sums{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px}
+.sum{border-radius:24px;padding:20px;min-height:116px;display:flex;flex-direction:column;justify-content:space-between}
+.sum p{font-weight:500;color:#4A524C}.sum strong{font-size:32px;font-variant-numeric:tabular-nums}
+.tb{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.inp{height:44px;border:1px solid #D5D9D3;border-radius:999px;padding:0 16px;background:#fff;outline:0;min-width:0;font-weight:400;display:block;width:100%}
+.inp:focus{border-color:var(--g6);box-shadow:0 0 0 3px var(--g1)}
+.tb .inp{flex:1 1 220px;width:auto}
+.pill{border:1px solid #D5D9D3;background:#fff;border-radius:999px;min-height:36px;padding:0 14px;cursor:pointer;font-size:13px}
+.pill.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.fa{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:4px}
+.form{display:grid;gap:16px}.form h3{font-size:18px}
+.note{color:var(--ink2);font-size:13px;line-height:1.5}
+.two{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.two>div{min-width:0;display:grid;gap:16px}
+.two>div:first-child{flex:1 1 460px}.two>div:last-child{flex:1 1 320px}
+.asg{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:14px;padding:10px 14px}
+.asg i{color:var(--g6);font-size:16px}.asg span:first-of-type{flex:1;font-weight:500}
+.row2{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}.row2 .inp{flex:1 1 160px}
+.inact td{opacity:.5}.inact .chip.g{background:var(--bg);color:var(--ink2)}
+.form-card{background:#fff;border-radius:24px;padding:24px}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(2,1fr)}.final{grid-column:1/-1}}
+@media(max-width:760px){#dash{flex-direction:column}aside{width:auto;position:static;height:auto;min-height:0}.hi{font-size:26px}}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<main id="login" hidden>
+  <form id="lf" class="lcard" novalidate>
+    <h1>Iniciar sesión</h1>
+    <p class="sub">Usa tu usuario de la empresa</p>
+    <div id="lb"></div>
+    <label>Correo electrónico<span class="fld"><i class="ti ti-mail"></i><input id="em" type="email" placeholder="tu.correo@empresa.com" autocomplete="username"></span></label>
+    <label>Contraseña<span class="fld"><i class="ti ti-lock"></i><input id="pw" type="password" placeholder="Ingresa tu contraseña" autocomplete="current-password"><button type="button" data-eye="#pw"><i class="ti ti-eye"></i></button></span></label>
+    <button class="btn dark" type="submit" style="justify-content:center">Entrar</button>
+    <p class="alt">¿Aún no tienes cuenta? <button type="button" class="lnk" data-go="signup">Crear cuenta</button></p>
+  </form>
+  <form id="sf" class="lcard" novalidate hidden>
+    <h1>Crear cuenta</h1>
+    <p class="sub">Registra tu empresa y tu usuario administrador</p>
+    <div id="sb"></div>
+    <label>Nombre de la empresa<span class="fld"><i class="ti ti-building"></i><input id="sco" type="text" placeholder="Mi empresa S.A. de C.V." autocomplete="organization"></span></label>
+    <label>Tu nombre<span class="fld"><i class="ti ti-user"></i><input id="snm" type="text" placeholder="Nombre y apellido" autocomplete="name"></span></label>
+    <label>Correo electrónico<span class="fld"><i class="ti ti-mail"></i><input id="sem" type="email" placeholder="tu.correo@empresa.com" autocomplete="username"></span></label>
+    <label>Contraseña<span class="fld"><i class="ti ti-lock"></i><input id="spw" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password"><button type="button" data-eye="#spw"><i class="ti ti-eye"></i></button></span></label>
+    <label>Confirmar<span class="fld"><i class="ti ti-lock-check"></i><input id="spw2" type="password" placeholder="Repite tu contraseña" autocomplete="new-password"><button type="button" data-eye="#spw2"><i class="ti ti-eye"></i></button></span></label>
+    <button id="sbtn" class="btn dark" type="submit" style="justify-content:center">Crear cuenta</button>
+    <p class="alt">¿Ya tienes cuenta? <button type="button" class="lnk" data-go="login">Iniciar sesión</button></p>
+  </form>
+</main>
+
+<!-- ===== DASHBOARD ===== -->
+<div id="dash" hidden>
+  <aside>
+    <div class="logo"><i class="ti ti-leaf"></i>finora</div>
+    <div class="sec">Financiero</div>
+    <button class="nv on" data-route="financiero"><i class="ti ti-layout-dashboard"></i>Dashboard financiero</button>
+    <div class="sec">Administración</div>
+    <button class="nv" data-route="usuarios"><i class="ti ti-users"></i>Usuarios</button>
+    <button class="nv" data-route="cuentas"><i class="ti ti-credit-card"></i>Cuentas</button>
+    <button class="nv" data-route="conceptos"><i class="ti ti-tag"></i>Conceptos</button>
+    <div class="me"><small>Tu espacio</small>
+      <div><span class="av" id="av">?</span><span><b id="co">Empresa</b><small id="ue"></small></span></div>
+      <button class="btn sm" style="margin-top:12px;width:100%;justify-content:center;background:#2B302C;color:#9AA19B;border:0" id="out"><i class="ti ti-logout"></i>Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- ======= VISTA: FINANCIERO ======= -->
+    <section id="v-financiero" class="view">
+      <header>
+        <div><h1 class="hi" id="hi"></h1><p id="sub" style="color:var(--ink2);margin-top:4px;font-size:14px"></p></div>
+        <div style="display:flex;align-items:center;gap:10px"><span id="currency" class="chip dark"></span><span class="av" id="av2">?</span></div>
+      </header>
+      <section class="ctl">
+        <div class="fw"><label class="df"><i class="ti ti-calendar"></i><span><small>Desde</small><input id="from" type="date" value="2026-10-26"></span></label><span id="fh"></span></div>
+        <div class="fw"><label class="df"><i class="ti ti-calendar"></i><span><small>Hasta</small><input id="to" type="date" value="2026-10-30"></span></label></div>
+        <button id="go" class="btn dark"><i class="ti ti-refresh"></i>Actualizar</button>
+      </section>
+      <div id="bn"></div>
+      <section id="kpis" class="kpis"></section>
+      <section id="risk" class="risk"></section>
+      <section id="detail" class="card"></section>
+    </section>
+
+    <!-- ======= VISTA: USUARIOS ======= -->
+    <section id="v-usuarios" class="view" hidden>
+      <div class="vh"><h2>Usuarios</h2><span class="sp"></span><button id="us-new" class="btn dark" data-perm="company.users.write"><i class="ti ti-user-plus"></i>Nuevo usuario</button></div>
+      <div id="us-err"></div>
+      <!-- Formulario nuevo usuario (oculto por defecto) -->
+      <div id="us-form" class="form-card form" hidden>
+        <h3>Nuevo usuario</h3>
+        <div id="us-fmsg"></div>
+        <div class="fgrid">
+          <label>Nombre<input class="inp" id="us-name" type="text" placeholder="Nombre completo" autocomplete="off"></label>
+          <label>Correo<input class="inp" id="us-email" type="email" placeholder="persona@empresa.com" autocomplete="off"></label>
+          <label>Contraseña<input class="inp" id="us-pass" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password"></label>
+        </div>
+        <p class="note">Los nuevos usuarios se crean sin privilegios de administrador. El historial de auditoría se conserva siempre.</p>
+        <div class="fa"><button type="button" class="btn line-btn sm" id="us-cancel">Cancelar</button><button type="button" class="btn dark sm" id="us-save">Crear usuario</button></div>
+      </div>
+      <!-- Conteos -->
+      <div id="us-sums" class="sums"></div>
+      <!-- Tabla -->
+      <div class="card">
+        <div class="tb"><input class="inp" id="us-q" type="search" placeholder="Buscar por nombre o correo" aria-label="Buscar usuario"><button id="us-only" class="pill" data-on="false">Solo activos</button></div>
+        <div id="us-list"></div>
+      </div>
+    </section>
+
+    <!-- ======= VISTA: CUENTAS ======= -->
+    <section id="v-cuentas" class="view" hidden>
+      <div class="vh"><h2>Cuentas</h2><span id="ac-count" class="chip n"></span><span class="sp"></span><button id="ac-new" class="btn dark" data-perm="accounts.write"><i class="ti ti-plus"></i>Nueva cuenta</button></div>
+      <div id="ac-err"></div>
+      <!-- Formulario nueva cuenta -->
+      <div id="ac-form" class="form-card form" hidden>
+        <h3>Nueva cuenta</h3>
+        <div id="ac-fmsg"></div>
+        <div class="fgrid">
+          <label>Nombre<input class="inp" id="ac-name" type="text" placeholder="Ej. Banco principal"></label>
+          <label>Tipo
+            <select class="inp" id="ac-type">
+              <option value="CASH">Efectivo</option>
+              <option value="DEBIT">Débito</option>
+              <option value="CREDIT">Crédito</option>
+              <option value="SAVINGS">Ahorro</option>
+              <option value="INVESTMENT">Inversión</option>
+              <option value="WALLET">Monedero</option>
+              <option value="OTHER">Otro</option>
+            </select>
+          </label>
+          <label>Banco (opcional)<input class="inp" id="ac-bank" type="text" placeholder="Ej. BBVA"></label>
+          <label>CLABE (opcional)<input class="inp" id="ac-clabe" type="text" placeholder="18 dígitos"></label>
+          <label>Últimos 4 dígitos (opcional)<input class="inp" id="ac-dig" type="text" inputmode="numeric" maxlength="4" placeholder="1234"></label>
+          <label>Descripción corta (opcional)<input class="inp" id="ac-desc" type="text" placeholder="Descripción breve"></label>
+        </div>
+        <div class="fa"><button type="button" class="btn line-btn sm" id="ac-cancel">Cancelar</button><button type="button" class="btn dark sm" id="ac-save">Crear cuenta</button></div>
+      </div>
+      <!-- Tabla -->
+      <div class="card">
+        <div class="tb">
+          <input class="inp" id="ac-q" type="search" placeholder="Buscar por nombre o banco" aria-label="Buscar cuenta">
+          <button class="pill on" data-tf="ALL">Todas</button>
+          <button class="pill" data-tf="CASH">Efectivo</button>
+          <button class="pill" data-tf="DEBIT">Débito</button>
+          <button class="pill" data-tf="SAVINGS">Ahorro</button>
+          <button id="ac-only" class="pill" data-on="false">Solo activas</button>
+        </div>
+        <div id="ac-list"></div>
+      </div>
+    </section>
+
+    <!-- ======= VISTA: CONCEPTOS ======= -->
+    <section id="v-conceptos" class="view" hidden>
+      <div id="co-err"></div>
+      <div class="two">
+        <!-- Izquierda: catálogo -->
+        <div>
+          <div class="vh"><h2>Catálogo de conceptos</h2><span class="sp"></span><button id="co-new" class="btn dark" data-perm="concepts.write"><i class="ti ti-plus"></i>Nuevo concepto</button></div>
+          <div id="co-form" class="form-card form" hidden>
+            <h3>Nuevo concepto</h3>
+            <div id="co-fmsg"></div>
+            <div class="fgrid">
+              <label>Nombre<input class="inp" id="co-name" type="text" placeholder="Ej. Ventas"></label>
+              <label>Tipo<select class="inp" id="co-type"><option value="INCOME">Ingreso</option><option value="EXPENSE">Egreso</option></select></label>
+            </div>
+            <label>Descripción corta (opcional)<input class="inp" id="co-desc" type="text" placeholder="Opcional"></label>
+            <div class="fa"><button type="button" class="btn line-btn sm" id="co-cancel">Cancelar</button><button type="button" class="btn dark sm" id="co-save">Crear concepto</button></div>
+          </div>
+          <div class="card">
+            <div class="tb">
+              <button class="pill on" data-ctf="ALL">Todos</button>
+              <button class="pill" data-ctf="INCOME">Ingreso</button>
+              <button class="pill" data-ctf="EXPENSE">Egreso</button>
+              <button id="co-only" class="pill" data-on="false">Solo activos</button>
+            </div>
+            <div id="co-list"></div>
+          </div>
+        </div>
+        <!-- Derecha: conceptos de cuenta -->
+        <div>
+          <div class="vh"><h2>Conceptos de la cuenta</h2></div>
+          <div class="form-card form">
+            <label>Cuenta:<select class="inp" id="co-acc" aria-label="Seleccionar cuenta"></select></label>
+            <div id="co-assign-row" class="row2" data-perm="concepts.write">
+              <select class="inp" id="co-pick" aria-label="Concepto a asignar"></select>
+              <button id="co-assign" class="btn dark sm" type="button" style="white-space:nowrap">Asignar concepto</button>
+            </div>
+            <div id="co-amsg"></div>
+            <div id="co-assigned" style="display:grid;gap:8px"></div>
+            <p class="note">Solo los conceptos asignados pueden usarse en un movimiento.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* ===================================================================
+   CONFIGURACIÓN — ajusta el puerto si tu backend usa otro
+   =================================================================== */
+const API = 'http://127.0.0.1:8000/graphql';
+
+/* ===================================================================
+   QUERIES Y MUTATIONS GRAPHQL
+   Ajusta los nombres si tu esquema usa otros (p.ej. el campo `input`)
+   =================================================================== */
+// Auth
+const QL_LOGIN = `mutation($input:LoginInput!){login(input:$input){token tokenType user{name email}}}`;
+const QL_SIGNUP = `mutation($company:String!,$name:String!,$email:String!,$password:String!){createCompanyAdmin(companyName:$company,adminName:$name,adminEmail:$email,adminPassword:$password)}`;
+
+// Financiero
+const QB = `query($from:Date!,$to:Date!){generalBalance(fromDate:$from,toDate:$to){companyId currency fromDate toDate openingBalance totalIncome totalExpense profit closingBalance isInRed accountsInRed accounts{accountId accountName isActive openingBalance totalIncome totalExpense profit closingBalance isInRed}}}`;
+
+// Usuarios — companyUsers devuelve userName, userEmail, roleName, isAdmin, isActive
+const QU = `query{companyUsers{id userId isAdmin isActive userName userEmail roleName}}`;
+const QU_NEW = `mutation($input:CreateCompanyUserInput!){createCompanyUser(input:$input){id userName userEmail isAdmin isActive roleName}}`;
+const QU_DEL = `mutation($id:ID!){deactivateCompanyUser(id:$id){id isActive}}`;
+
+// Cuentas
+const QA = `query($companyId:ID!){accounts(companyId:$companyId){id name accountType bankName clabe cardLastDigits isActive}}`;
+const QA_NEW = `mutation($input:CreateAccountInput!){createAccount(input:$input){id name accountType bankName clabe cardLastDigits isActive}}`;
+
+// Conceptos
+const QC = `query($companyId:ID!){concepts(companyId:$companyId){id name conceptType isActive shortDescription}}`;
+const QC_NEW = `mutation($input:CreateConceptInput!){createConcept(input:$input){id name conceptType isActive}}`;
+const QAC = `query($accountId:ID!){accountConcepts(accountId:$accountId){id conceptId isActive concept{id name conceptType}}}`;
+const QAC_ADD = `mutation($input:AssignConceptToAccountInput!){assignConceptToAccount(input:$input){id conceptId isActive concept{id name conceptType}}}`;
+const QAC_DEL = `mutation($accountId:ID!,$conceptId:ID!){removeConceptFromAccount(accountId:$accountId,conceptId:$conceptId)}`;
+
+/* ===================================================================
+   UTILIDADES
+   =================================================================== */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+const MES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const money = s => { s=String(s??'0'); const neg=s[0]==='-'; if(neg)s=s.slice(1); let[i,d=''] = s.split('.'); d=(d+'00').slice(0,2); return (neg?'-':'')+i.replace(/\B(?=(\d{3})+(?!\d))/g,',')+'.'+d; };
+const isZero = s => /^-?0+(\.0+)?$/.test(String(s));
+const ACCT_LABEL = {CASH:'Efectivo',DEBIT:'Débito',CREDIT:'Crédito',SAVINGS:'Ahorro',INVESTMENT:'Inversión',WALLET:'Monedero',OTHER:'Otro'};
+const CON_LABEL = {INCOME:'Ingreso',EXPENSE:'Egreso'};
+function saveSession(r){ sessionStorage.setItem('tk', r.token); sessionStorage.setItem('us', JSON.stringify(r.user)); }
+function getToken(){ return sessionStorage.getItem('tk'); }
+function getUser(){ try{ return JSON.parse(sessionStorage.getItem('us')||'{}'); }catch{ return {}; } }
+function getCompanyId(){ return sessionStorage.getItem('company_id'); }
+
+/* Permisos: se guardan como Set tras el login */
+let userPerms = new Set();
+function hasPerms(perm){ return userPerms.has(perm); }
+function savePerms(perms){ userPerms = new Set(perms||[]); sessionStorage.setItem('perms', JSON.stringify([...userPerms])); }
+function loadPerms(){ try{ userPerms=new Set(JSON.parse(sessionStorage.getItem('perms')||'[]')); }catch{ userPerms=new Set(); } }
+
+function applyPermVisibility(root){
+  root = root || document;
+  root.querySelectorAll('[data-perm]').forEach(el => {
+    const p = el.dataset.perm;
+    if(p && !hasPerms(p)) el.hidden = true;
+    else el.hidden = false;
+  });
+}
+
+/* ===================================================================
+   GQL — llamada al backend
+   =================================================================== */
+async function gql(query, variables){
+  const tk = getToken();
+  const headers = {'Content-Type':'application/json'};
+  if(tk) headers['Authorization'] = 'Bearer ' + tk;
+  const r = await fetch(API, {method:'POST', headers, body: JSON.stringify({query, variables})});
+  if(!r.ok) throw new Error('Error de red: '+r.status);
+  const j = await r.json();
+  if(j.errors && j.errors.length){
+    const msg = j.errors.map(e=>e.message).join('; ');
+    throw Object.assign(new Error(msg), {gql:true, msg});
+  }
+  return j.data;
+}
+
+/* Después del login queremos cargar los permisos del usuario.
+   El backend no tiene query de "mis permisos" pero podemos
+   intentar varias queries y ver cuáles dan error.
+   Como workaround sencillo: intentamos cargar companyUsers;
+   si falla → no tiene company.users.read; igual con accounts, concepts. */
+async function fetchPerms(){
+  const user = getUser();
+  const companyId = getCompanyId();
+  const perms = [];
+  const tryPerm = async(permCode, testFn) => {
+    try{ await testFn(); perms.push(permCode); } catch{}
+  };
+  await tryPerm('company.users.read', ()=>gql(QU));
+  await tryPerm('accounts.read', ()=>gql(QA, {companyId: companyId||'1'}));
+  await tryPerm('concepts.read', ()=>gql(QC, {companyId: companyId||'1'}));
+
+  // Verificar el rol real del usuario actual para otorgar permisos de escritura
+  try {
+    const res = await gql(`query{companyUsers{userEmail roleCode isAdmin}}`);
+    const me = (res.companyUsers || []).find(u => (u.userEmail||'').toLowerCase() === (user.email||'').toLowerCase());
+    if (me && (me.isAdmin || me.roleCode === 'ADMINISTRADOR')) {
+      perms.push('company.users.write', 'accounts.write', 'concepts.write');
+    } else if (me && me.roleCode === 'CONTADOR') {
+      perms.push('accounts.write', 'concepts.write');
+    }
+  } catch {}
+  savePerms(perms);
+}
+
+/* ===================================================================
+   NAVEGACIÓN
+   =================================================================== */
+const views = ['financiero','usuarios','cuentas','conceptos'];
+function navigate(route){
+  views.forEach(v => { const el = $(`#v-${v}`); if(el) el.hidden = (v!==route); });
+  $$('.nv[data-route]').forEach(b => b.classList.toggle('on', b.dataset.route===route));
+  sessionStorage.setItem('route', route);
+  if(route==='usuarios') loadUsuarios();
+  else if(route==='cuentas') loadCuentas();
+  else if(route==='conceptos') loadConceptos();
+  else loadFinanciero();
+}
+
+function view(section){
+  $('#login').hidden = section!=='login';
+  $('#dash').hidden = section!=='dash';
+  if(section==='login'){ $('#sf').hidden=true; $('#lf').hidden=false; }
+}
+
+function logout(msg){
+  sessionStorage.clear(); userPerms=new Set();
+  view('login');
+  if(msg) $('#lb').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(msg)}</span></div>`;
+}
+
+/* ===================================================================
+   INICIO DE SESIÓN
+   =================================================================== */
+async function start(){
+  const u = getUser();
+  if(!u.name){ return logout('La sesión guardada no es válida.'); }
+  loadPerms();
+  const initials = (u.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  $('#av').textContent = initials; $('#av2').textContent = initials;
+  $('#ue').textContent = u.email||'';
+  const h = new Date().getHours();
+  const greeting = h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
+  $('#hi').innerHTML = `${greeting}, <span>${esc(u.name.split(' ')[0])}</span>`;
+  $('#sub').textContent = 'Dashboard financiero';
+  view('dash');
+  applyPermVisibility($('#dash'));
+  const route = sessionStorage.getItem('route')||'financiero';
+  navigate(route);
+}
+
+/* ===================================================================
+   FINANCIERO
+   =================================================================== */
+const K=[['Saldo inicial','openingBalance','wallet','blue'],['Ingresos','totalIncome','download','green'],
+         ['Egresos','totalExpense','upload','yellow'],['Profit','profit','trending-up','olive'],
+         ['Saldo final','closingBalance','wallet','final']];
+
+function banner(type, msg){
+  $('#bn').innerHTML = msg ? `<div class="bn ${type}"><i class="ti ti-${type==='e'?'alert-circle':'info-circle'}"></i><span>${esc(msg)}</span></div>` : '';
+}
+
+async function loadFinanciero(){
+  const from=$('#from').value, to=$('#to').value;
+  if(!from||!to){ $('#fh').textContent='Selecciona ambas fechas'; return; }
+  if(from>to){ $('#fh').textContent='La fecha inicial no puede ser mayor a la final'; return; }
+  $('#fh').textContent=''; banner('','');
+  try{
+    const d = (await gql(QB,{from,to})).generalBalance;
+    renderKpis(d); renderDetail(d);
+    if(!d.accounts.length) banner('i','Esta empresa aún no tiene cuentas con movimientos.');
+    else if(d.accounts.every(a=>isZero(a.totalIncome)&&isZero(a.totalExpense))) banner('i',`Sin movimientos entre ${from} y ${to}.`);
+  } catch(x){
+    if(x.gql && /permiso|acceso|denegado/i.test(x.msg)){ renderDenied(); return; }
+    banner('e', x.gql?x.msg:'No se pudo conectar con el servidor.');
+    $('#kpis').innerHTML=''; $('#risk').hidden=true; $('#detail').innerHTML='';
+  }
+}
+
+function renderKpis(d){
+  $('#currency').textContent = d.currency||'MXN';
+  $('#kpis').innerHTML=K.map(([l,k,ic,c])=>`
+    <article class="k ${c}"><div class="kt"><i class="ti ti-${ic}"></i></div><p>${esc(l)}</p>
+    <strong>${money(d[k])}</strong></article>`).join('');
+  const $r = $('#risk'); $r.hidden=false;
+  $r.innerHTML=`<h2 style="font-size:18px;margin-right:8px">Estado de riesgo</h2>
+    <span class="chip ${d.isInRed?'r':'g'}"><i class="ti ti-${d.isInRed?'trending-down':'trending-up'}"></i>General en rojo: ${d.isInRed?'Sí':'No'}</span>
+    <span class="chip ${d.accountsInRed?'r':'g'}"><i class="ti ti-${d.accountsInRed?'alert-circle':'circle-check'}"></i>Cuentas en rojo: <b>${d.accountsInRed}</b></span>`;
+}
+
+function renderDetail(d){
+  const h=`<div class="dh"><h2>Detalle por cuenta</h2><span class="chip n">${d.accounts.length} cuentas</span><small>Importes en ${esc(d.currency||'MXN')}</small></div>`;
+  if(!d.accounts.length){ $('#detail').innerHTML=h+`<div class="msg"><span class="shape"><i class="ti ti-building-bank"></i></span><h3>Sin cuentas</h3><p>Cuando se registren cuentas y movimientos, aparecerán aquí.</p></div>`; return; }
+  const rows=d.accounts.map((a,i)=>{
+    const z=isZero(a.totalIncome)&&isZero(a.totalExpense);
+    return `<tr class="${z?'z':''}"><td><div class="ac"><span class="av a${i%2}">${esc(a.accountName[0])}</span>${esc(a.accountName)}${z?'<span class="chip n">Sin movimientos</span>':''}</div></td>
+      <td>${money(a.openingBalance)}</td><td>${money(a.totalIncome)}</td><td>${money(a.totalExpense)}</td>
+      <td class="${String(a.profit)[0]==='-'?'amb':''}">${money(a.profit)}</td>
+      <td class="fin ${a.isInRed?'red':''}">${money(a.closingBalance)}${a.isInRed?'<span class="chip r">En rojo</span>':''}</td></tr>`;
+  }).join('');
+  $('#detail').innerHTML=h+`<table><thead><tr><th>Cuenta</th><th>Saldo inicial</th><th>Ingresos</th><th>Egresos</th><th>Profit</th><th>Saldo final</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderDenied(){
+  $('#kpis').innerHTML=K.map(([l,,ic,c])=>`<article class="k ${c} lock"><div class="kt"><i class="ti ti-${ic}"></i></div><p>${l}</p><strong><i class="ti ti-lock"></i></strong></article>`).join('');
+  $('#risk').hidden=true;
+  $('#detail').innerHTML=`<div class="msg"><i class="ti ti-lock bi"></i><h3>Acceso denegado</h3><p>Tu usuario no tiene permiso para ver el balance.</p></div>`;
+}
+
+$('#go').onclick = loadFinanciero;
+
+/* ===================================================================
+   USUARIOS
+   =================================================================== */
+let _usuarios = [];
+
+async function loadUsuarios(){
+  $('#us-list').innerHTML = '<div class="msg"><i class="ti ti-refresh bi" style="animation:spin 1s linear infinite"></i><h3>Cargando…</h3></div>';
+  $('#us-err').innerHTML='';
+  try{
+    const data = await gql(QU);
+    _usuarios = data.companyUsers || [];
+    renderUsuarios();
+    renderUserSums();
+  } catch(x){
+    $('#us-list').innerHTML='';
+    if(x.gql && /permiso|acceso|denegado|membresía/i.test(x.msg)){
+      $('#us-err').innerHTML=`<div class="bn e"><i class="ti ti-lock"></i><span>Sin permiso para ver usuarios.</span></div>`;
+    } else {
+      $('#us-err').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.message)}</span></div>`;
+    }
+  }
+  applyPermVisibility($('#v-usuarios'));
+}
+
+function renderUserSums(){
+  const activos = _usuarios.filter(u=>u.isActive).length;
+  const admin = _usuarios.filter(u=>u.isAdmin).length;
+  const inactivos = _usuarios.filter(u=>!u.isActive).length;
+  if(admin>1){
+    $('#us-err').innerHTML=`<div class="bn e"><i class="ti ti-alert-triangle"></i><span>⚠️ Se detectaron ${admin} administradores principales — esto es un error de datos.</span></div>`;
+  }
+  $('#us-sums').innerHTML=`
+    <div class="sum blue"><p>Usuarios activos</p><strong>${activos}</strong></div>
+    <div class="sum green"><p>Administrador principal</p><strong>${admin}</strong></div>
+    <div class="sum yellow"><p>Inactivos</p><strong>${inactivos}</strong></div>`;
+}
+
+function renderUsuarios(){
+  const q = ($('#us-q').value||'').toLowerCase();
+  const soloActivos = $('#us-only').dataset.on === 'true';
+  let lista = _usuarios.filter(u => {
+    if(soloActivos && !u.isActive) return false;
+    if(q && !(u.userName||'').toLowerCase().includes(q) && !(u.userEmail||'').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  if(!lista.length){
+    $('#us-list').innerHTML=`<div class="msg"><span class="shape"><i class="ti ti-users"></i></span><h3>${_usuarios.length?'Sin resultados':'Sin usuarios'}</h3><p>${_usuarios.length?'Ajusta el filtro de búsqueda.':'No hay miembros registrados en esta empresa.'}</p></div>`;
+    return;
+  }
+  const puedeEscribir = hasPerms('company.users.write');
+  const rows = lista.map(u=>`
+    <tr class="${u.isActive?'':'inact'}">
+      <td><div class="ac"><span class="av" style="font-size:12px">${esc((u.userName||'?')[0].toUpperCase())}</span>${esc(u.userName||'—')}</div></td>
+      <td class="l">${esc(u.userEmail||'—')}</td>
+      <td class="l">${u.roleName?`<span class="chip n">${esc(u.roleName)}</span>`:'<span style="color:var(--ink2);font-size:13px">Sin rol</span>'}</td>
+      <td class="l">${u.isAdmin?'<span class="chip g"><i class="ti ti-star"></i>Sí</span>':'No'}</td>
+      <td class="l"><span class="chip ${u.isActive?'g':'n'}">${u.isActive?'Activo':'Inactivo'}</span></td>
+      <td class="l">${puedeEscribir&&u.isActive&&!u.isAdmin?`<button class="btn sm line-btn" data-uid="${esc(u.id)}" data-deact>Desactivar</button>`:''}</td>
+    </tr>`).join('');
+  $('#us-list').innerHTML=`<table><thead><tr><th>Nombre</th><th class="l">Correo</th><th class="l">Rol</th><th class="l">Administrador</th><th class="l">Estado</th><th class="l">Acción</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+  // Eventos desactivar
+  $('#us-list').querySelectorAll('[data-deact]').forEach(btn => {
+    btn.onclick = async () => {
+      const uid = btn.dataset.uid;
+      if(!confirm('Esta persona dejará de poder operar. El historial se conserva. ¿Continuar?')) return;
+      try{
+        await gql(QU_DEL, {id: uid});
+        await loadUsuarios();
+      } catch(x){
+        $('#us-err').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.msg||x.message)}</span></div>`;
+      }
+    };
+  });
+}
+
+// Búsqueda y filtro
+$('#us-q').oninput = renderUsuarios;
+$('#us-only').onclick = function(){
+  this.dataset.on = this.dataset.on==='true'?'false':'true';
+  this.classList.toggle('on', this.dataset.on==='true');
+  renderUsuarios();
+};
+
+// Formulario nuevo usuario
+$('#us-new').onclick = () => { $('#us-form').hidden=false; $('#us-name').focus(); $('#us-fmsg').innerHTML=''; };
+$('#us-cancel').onclick = () => { $('#us-form').hidden=true; $('#us-name').value=''; $('#us-email').value=''; $('#us-pass').value=''; };
+$('#us-save').onclick = async () => {
+  const name=$('#us-name').value.trim(), email=$('#us-email').value.trim(), pass=$('#us-pass').value;
+  if(!name||!email||!pass){ $('#us-fmsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>Llena todos los campos.</span></div>`; return; }
+  if(pass.length<8){ $('#us-fmsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>La contraseña debe tener al menos 8 caracteres.</span></div>`; return; }
+  $('#us-save').disabled=true;
+  try{
+    await gql(QU_NEW, {input:{name, email, password:pass}});
+    $('#us-form').hidden=true; $('#us-name').value=''; $('#us-email').value=''; $('#us-pass').value='';
+    $('#us-fmsg').innerHTML='';
+    await loadUsuarios();
+  } catch(x){
+    $('#us-fmsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.msg||x.message)}</span></div>`;
+  } finally { $('#us-save').disabled=false; }
+};
+
+/* ===================================================================
+   CUENTAS
+   =================================================================== */
+let _cuentas = [];
+let _acFiltroTipo = 'ALL';
+
+async function loadCuentas(){
+  $('#ac-list').innerHTML='<div class="msg"><h3 style="color:var(--ink2)">Cargando…</h3></div>';
+  $('#ac-err').innerHTML='';
+  const companyId = getCompanyId()||'1';
+  try{
+    const data = await gql(QA, {companyId});
+    _cuentas = data.accounts||[];
+    renderCuentas();
+  } catch(x){
+    $('#ac-list').innerHTML='';
+    if(x.gql && /permiso|acceso|denegado/i.test(x.msg)){
+      $('#ac-err').innerHTML=`<div class="bn e"><i class="ti ti-lock"></i><span>Sin permiso para ver cuentas.</span></div>`;
+    } else {
+      $('#ac-err').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.message)}</span></div>`;
+    }
+  }
+  applyPermVisibility($('#v-cuentas'));
+}
+
+function renderCuentas(){
+  const q = ($('#ac-q').value||'').toLowerCase();
+  const soloActivas = $('#ac-only').dataset.on==='true';
+  let lista = _cuentas.filter(a => {
+    if(soloActivas && !a.isActive) return false;
+    if(_acFiltroTipo!=='ALL' && a.accountType!==_acFiltroTipo) return false;
+    if(q && !(a.name||'').toLowerCase().includes(q) && !(a.bankName||'').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  $('#ac-count').textContent = `${_cuentas.length} cuentas`;
+  if(!lista.length){
+    $('#ac-list').innerHTML=`<div class="msg"><span class="shape"><i class="ti ti-credit-card"></i></span><h3>${_cuentas.length?'Sin resultados':'Sin cuentas'}</h3><p>${_cuentas.length?'Ajusta los filtros.':'Esta empresa aún no tiene cuentas registradas.'}</p></div>`;
+    return;
+  }
+  const maskClabe = c => c?'****'+c.slice(-4):null;
+  const rows = lista.map((a,i)=>{
+    const ref = a.cardLastDigits?'****'+a.cardLastDigits : maskClabe(a.clabe) || '—';
+    return `<tr class="${a.isActive?'':'inact'}">
+      <td><div class="ac"><span class="av a${i%2}">${esc(a.name[0])}</span>${esc(a.name)}</div></td>
+      <td class="l"><span class="chip n">${ACCT_LABEL[a.accountType]||a.accountType}</span></td>
+      <td class="l">${esc(a.bankName||'—')}</td>
+      <td class="l" style="font-family:monospace">${esc(ref)}</td>
+      <td class="l"><span class="chip ${a.isActive?'g':'n'}">${a.isActive?'Activa':'Inactiva'}</span></td>
+    </tr>`;
+  }).join('');
+  $('#ac-list').innerHTML=`<table><thead><tr><th>Nombre</th><th class="l">Tipo</th><th class="l">Banco</th><th class="l">Referencia</th><th class="l">Estado</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+$('#ac-q').oninput = renderCuentas;
+$('#ac-only').onclick = function(){
+  this.dataset.on = this.dataset.on==='true'?'false':'true';
+  this.classList.toggle('on', this.dataset.on==='true');
+  renderCuentas();
+};
+$$('[data-tf]').forEach(b => b.onclick = function(){
+  _acFiltroTipo = this.dataset.tf;
+  $$('[data-tf]').forEach(x=>x.classList.toggle('on', x===this));
+  renderCuentas();
+});
+
+$('#ac-new').onclick = () => { $('#ac-form').hidden=false; $('#ac-name').focus(); $('#ac-fmsg').innerHTML=''; };
+$('#ac-cancel').onclick = () => { $('#ac-form').hidden=true; $('#ac-name').value=''; $('#ac-bank').value=''; $('#ac-clabe').value=''; $('#ac-dig').value=''; $('#ac-desc').value=''; };
+$('#ac-save').onclick = async () => {
+  const companyId = getCompanyId()||'1';
+  const name=$('#ac-name').value.trim(), acType=$('#ac-type').value,
+        bank=$('#ac-bank').value.trim()||null, clabe=$('#ac-clabe').value.trim()||null,
+        dig=$('#ac-dig').value.trim()||null, desc=$('#ac-desc').value.trim()||null;
+  if(!name){ $('#ac-fmsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>El nombre es obligatorio.</span></div>`; return; }
+  $('#ac-save').disabled=true;
+  try{
+    await gql(QA_NEW, {input:{companyId, accountType: acType, name, bankName:bank, clabe, cardLastDigits:dig, shortDescription:desc}});
+    $('#ac-form').hidden=true; $('#ac-name').value=''; $('#ac-bank').value=''; $('#ac-clabe').value=''; $('#ac-dig').value=''; $('#ac-desc').value='';
+    await loadCuentas();
+  } catch(x){
+    $('#ac-fmsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.msg||x.message)}</span></div>`;
+  } finally { $('#ac-save').disabled=false; }
+};
+
+/* ===================================================================
+   CONCEPTOS
+   =================================================================== */
+let _conceptos = [];
+let _acConceptos = []; // conceptos de la cuenta seleccionada
+let _coFiltroTipo = 'ALL';
+
+async function loadConceptos(){
+  const companyId = getCompanyId()||'1';
+  $('#co-list').innerHTML='<div class="msg"><h3 style="color:var(--ink2)">Cargando…</h3></div>';
+  $('#co-err').innerHTML='';
+  try{
+    const [cData, aData] = await Promise.all([
+      gql(QC, {companyId}),
+      gql(QA, {companyId}),
+    ]);
+    _conceptos = cData.concepts||[];
+    const cuentas = aData.accounts||[];
+    renderConceptos();
+    // Poblar selector de cuentas
+    const sel=$('#co-acc');
+    sel.innerHTML=cuentas.filter(a=>a.isActive).map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+    // Poblar selector de conceptos a asignar
+    renderPickConceptos();
+    if(cuentas.length) loadConceptosDeCuenta(sel.value);
+  } catch(x){
+    $('#co-list').innerHTML='';
+    if(x.gql&&/permiso|acceso|denegado/i.test(x.msg)){
+      $('#co-err').innerHTML=`<div class="bn e"><i class="ti ti-lock"></i><span>Sin permiso para ver conceptos.</span></div>`;
+    } else {
+      $('#co-err').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.message)}</span></div>`;
+    }
+  }
+  applyPermVisibility($('#v-conceptos'));
+}
+
+function renderPickConceptos(){
+  const sel=$('#co-pick');
+  const activos = _conceptos.filter(c=>c.isActive);
+  sel.innerHTML=activos.map(c=>`<option value="${esc(c.id)}">${esc(c.name)} (${CON_LABEL[c.conceptType]||c.conceptType})</option>`).join('');
+}
+
+function renderConceptos(){
+  const soloActivos=$('#co-only').dataset.on==='true';
+  let lista=_conceptos.filter(c=>{
+    if(soloActivos&&!c.isActive) return false;
+    if(_coFiltroTipo!=='ALL'&&c.conceptType!==_coFiltroTipo) return false;
+    return true;
+  });
+  if(!lista.length){
+    $('#co-list').innerHTML=`<div class="msg"><span class="shape"><i class="ti ti-tag"></i></span><h3>${_conceptos.length?'Sin resultados':'Sin conceptos'}</h3><p>${_conceptos.length?'Ajusta los filtros.':'No hay conceptos registrados.'}</p></div>`;
+    return;
+  }
+  const rows=lista.map(c=>`<tr class="${c.isActive?'':'inact'}">
+    <td>${esc(c.name)}</td>
+    <td class="l"><span class="chip ${c.conceptType==='INCOME'?'g':'y'}">${CON_LABEL[c.conceptType]||c.conceptType}</span></td>
+    <td class="l"><span class="chip ${c.isActive?'g':'n'}">${c.isActive?'Activo':'Inactivo'}</span></td>
+  </tr>`).join('');
+  $('#co-list').innerHTML=`<table><thead><tr><th>Concepto</th><th class="l">Tipo</th><th class="l">Estado</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function loadConceptosDeCuenta(accountId){
+  if(!accountId) return;
+  $('#co-assigned').innerHTML='<p style="color:var(--ink2);font-size:13px">Cargando…</p>';
+  try{
+    const data=await gql(QAC,{accountId});
+    _acConceptos=(data.accountConcepts||[]).filter(ac=>ac.isActive);
+    renderConceptosDeCuenta();
+  } catch{
+    $('#co-assigned').innerHTML='<p style="color:var(--r6);font-size:13px">Error al cargar conceptos.</p>';
+  }
+}
+
+function renderConceptosDeCuenta(){
+  const puedeEscribir=hasPerms('concepts.write');
+  if(!_acConceptos.length){
+    $('#co-assigned').innerHTML='<p style="color:var(--ink2);font-size:13px">Esta cuenta no tiene conceptos asignados.</p>';
+    return;
+  }
+  $('#co-assigned').innerHTML=_acConceptos.map(ac=>`
+    <div class="asg">
+      <i class="ti ti-${ac.concept.conceptType==='INCOME'?'arrow-down-circle':'arrow-up-circle'}"></i>
+      <span>${esc(ac.concept.name)}</span>
+      <span class="chip ${ac.concept.conceptType==='INCOME'?'g':'y'}">${CON_LABEL[ac.concept.conceptType]||ac.concept.conceptType}</span>
+      ${puedeEscribir?`<button class="btn sm line-btn" data-rm-concept="${esc(ac.concept.id)}">Quitar</button>`:''}
+    </div>`).join('');
+  if(puedeEscribir){
+    $('#co-assigned').querySelectorAll('[data-rm-concept]').forEach(btn=>{
+      btn.onclick=async()=>{
+        const accountId=$('#co-acc').value, conceptId=btn.dataset.rmConcept;
+        try{
+          await gql(QAC_DEL,{accountId,conceptId});
+          await loadConceptosDeCuenta(accountId);
+          $('#co-amsg').innerHTML='';
+        } catch(x){
+          $('#co-amsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.msg||x.message)}</span></div>`;
+        }
+      };
+    });
+  }
+}
+
+$('#co-acc').onchange=()=>loadConceptosDeCuenta($('#co-acc').value);
+
+$('#co-assign').onclick=async()=>{
+  const accountId=$('#co-acc').value, conceptId=$('#co-pick').value;
+  if(!accountId||!conceptId){ $('#co-amsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>Selecciona cuenta y concepto.</span></div>`; return; }
+  $('#co-assign').disabled=true;
+  try{
+    await gql(QAC_ADD,{input:{accountId,conceptId}});
+    await loadConceptosDeCuenta(accountId);
+    $('#co-amsg').innerHTML=`<div class="bn o"><i class="ti ti-circle-check"></i><span>Concepto asignado.</span></div>`;
+    setTimeout(()=>{ $('#co-amsg').innerHTML=''; },3000);
+  } catch(x){
+    $('#co-amsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.msg||x.message)}</span></div>`;
+  } finally{ $('#co-assign').disabled=false; }
+};
+
+$('#co-only').onclick=function(){
+  this.dataset.on=this.dataset.on==='true'?'false':'true';
+  this.classList.toggle('on',this.dataset.on==='true');
+  renderConceptos();
+};
+$$('[data-ctf]').forEach(b=>b.onclick=function(){
+  _coFiltroTipo=this.dataset.ctf;
+  $$('[data-ctf]').forEach(x=>x.classList.toggle('on',x===this));
+  renderConceptos();
+});
+
+$('#co-new').onclick=()=>{ $('#co-form').hidden=false; $('#co-name').focus(); $('#co-fmsg').innerHTML=''; };
+$('#co-cancel').onclick=()=>{ $('#co-form').hidden=true; $('#co-name').value=''; $('#co-desc').value=''; };
+$('#co-save').onclick=async()=>{
+  const companyId=getCompanyId()||'1', name=$('#co-name').value.trim(), conceptType=$('#co-type').value, desc=$('#co-desc').value.trim()||null;
+  if(!name){ $('#co-fmsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>El nombre es obligatorio.</span></div>`; return; }
+  $('#co-save').disabled=true;
+  try{
+    await gql(QC_NEW,{input:{companyId,conceptType,name,shortDescription:desc}});
+    $('#co-form').hidden=true; $('#co-name').value=''; $('#co-desc').value='';
+    await loadConceptos();
+  } catch(x){
+    $('#co-fmsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.msg||x.message)}</span></div>`;
+  } finally{ $('#co-save').disabled=false; }
+};
+
+/* ===================================================================
+   EVENTOS GLOBALES
+   =================================================================== */
+// Navegación lateral
+$$('.nv[data-route]').forEach(b=>b.onclick=()=>navigate(b.dataset.route));
+
+// Cerrar sesión
+$('#out').onclick=()=>logout();
+
+// Login
+const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+$('#lf').onsubmit=async e=>{
+  e.preventDefault();
+  const em=$('#em').value.trim(), pw=$('#pw').value;
+  const err=t=>$('#lb').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(t)}</span></div>`;
+  if(!em||!pw) return err('Ingresa tu correo y contraseña.');
+  const btn=$('#lf button[type=submit]'); btn.disabled=true; $('#lb').innerHTML='';
+  try{
+    const r=(await gql(QL_LOGIN,{input:{email:em,password:pw}})).login;
+    // Intentar obtener el companyId desde el token (si el servidor lo devuelve en el payload)
+    // Workaround: lo guardamos al hacer la primera query de accounts
+    saveSession(r);
+    // Cargar permisos
+    await fetchPerms().catch(()=>{});
+    start();
+  } catch(x){
+    err(x.gql?(/credencial|usuario|contraseña|inactiv/i.test(x.msg)?'Correo o contraseña incorrectos.':x.msg):'No se pudo conectar con el servidor.');
+  } finally{ btn.disabled=false; }
+};
+
+// Sign up
+$('#sf').onsubmit=async e=>{
+  e.preventDefault();
+  const co=$('#sco').value.trim(),nm=$('#snm').value.trim(),em=$('#sem').value.trim(),pw=$('#spw').value,pw2=$('#spw2').value,btn=$('#sbtn');
+  const msg=(k,t)=>$('#sb').innerHTML=`<div class="bn ${k}"><i class="ti ti-${k==='o'?'circle-check':'alert-circle'}"></i><span>${esc(t)}</span></div>`;
+  if(!co||!nm||!EMAIL_RE.test(em)||pw.length<8||pw!==pw2){
+    if(!co) return msg('e','Ingresa el nombre de tu empresa.');
+    if(!nm) return msg('e','Ingresa tu nombre.');
+    if(!EMAIL_RE.test(em)) return msg('e','Ingresa un correo válido.');
+    if(pw.length<8) return msg('e','La contraseña debe tener al menos 8 caracteres.');
+    return msg('e','Las contraseñas no coinciden.');
+  }
+  btn.disabled=true; $('#sb').innerHTML='';
+  let creada=false;
+  try{
+    await gql(QL_SIGNUP,{company:co,name:nm,email:em,password:pw});
+    creada=true;
+    const r=(await gql(QL_LOGIN,{input:{email:em,password:pw}})).login;
+    saveSession(r); await fetchPerms().catch(()=>{}); $('#sf').reset(); start();
+  } catch(x){
+    if(creada){ $('#sf').reset(); $('#em').value=em; go('login'); $('#lb').innerHTML='<div class="bn o"><i class="ti ti-circle-check"></i><span>Cuenta creada. Inicia sesión para continuar.</span></div>'; }
+    else msg('e',x.gql?(/registrad|existe|duplic/i.test(x.msg)?'Ese correo ya está registrado.':'No pudimos crear la cuenta.'):'No se pudo conectar con el servidor.');
+  } finally{ btn.disabled=false; }
+};
+
+document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{
+  const t=b.dataset.go;
+  if(t==='signup'){ $('#lf').hidden=true; $('#sf').hidden=false; }
+  else{ $('#sf').hidden=true; $('#lf').hidden=false; }
+});
+document.querySelectorAll('[data-eye]').forEach(b=>b.onclick=()=>{ const p=$(b.dataset.eye); p.type=p.type==='password'?'text':'password'; });
+
+/* ===================================================================
+   ARRANQUE
+   =================================================================== */
+// Cuando el backend devuelva el companyId en el token o en la sesión,
+// guárdalo aquí. Por ahora: lo extraemos de la primera query exitosa.
+const _origFetch = window.fetch;
+// Intentamos leer el company_id del JWT (si el backend lo incluye)
+function tryExtractCompanyFromToken(){
+  const tk=getToken();
+  if(!tk) return;
+  try{
+    const payload=JSON.parse(atob(tk.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    if(payload.company_id) sessionStorage.setItem('company_id', String(payload.company_id));
+  } catch{}
+}
+
+if(getToken()){ tryExtractCompanyFromToken(); start(); }
+else view('login');
+</script>
+</body>
+</html>

@@ -11,10 +11,10 @@ from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 import strawberry
 from strawberry.fastapi import GraphQLRouter
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from graphql import GraphQLError
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, get_db, SessionLocal
 import app.models as models
@@ -45,9 +45,9 @@ ALLOWED_ORIGINS = [
 ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,  
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],  
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -74,12 +74,12 @@ def verify_read_permission(info: strawberry.Info) -> dict:
 
     permissions = payload.get("permissions", [])
     required_permissions = {"accounts:read", "movements:read", "balances:read", "READ"}
-    
+
     has_permission = (
         payload.get("role") in ("ADMIN", "Admin", "READER", "Viewer", "ADMINISTRADOR", "CONSULTA", "CONTADOR")
         or any(perm in permissions for perm in required_permissions)
     )
-    
+
     if not has_permission:
         raise GraphQLError("Acceso denegado: El usuario no cuenta con permisos de lectura para consultar balances.")
     return payload
@@ -203,12 +203,26 @@ class User:
     email: str
 
 @strawberry.type
+class Role:
+    id: strawberry.ID
+    code: str
+    name: str
+    description: Optional[str]
+    isActive: bool
+
+@strawberry.type
 class CompanyUserType:
     id: strawberry.ID
     companyId: strawberry.ID
     userId: strawberry.ID
     isAdmin: bool
     isActive: bool
+    userName: Optional[str]
+    userEmail: Optional[str]
+    roleName: Optional[str]
+    roleCode: Optional[str]
+    user: Optional[User] = None
+    role: Optional[Role] = None
 
 @strawberry.type
 class Account:
@@ -273,14 +287,6 @@ class AuthPayload:
     token: str
     tokenType: str
     user: Optional[User]
-
-@strawberry.type
-class Role:
-    id: strawberry.ID
-    code: str
-    name: str
-    description: Optional[str]
-    isActive: bool
 
 @strawberry.type
 class Permission:
@@ -397,7 +403,7 @@ class CreateTransactionInput:
     conceptId: strawberry.ID
     transactionType: TransactionType
     amount: Decimal
-    idempotencyKey: str  # obligatorio: va antes de los campos con valor por defecto
+    idempotencyKey: str
     transactionDate: Optional[datetime] = None
     shortDescription: Optional[str] = None
     longDescription: Optional[str] = None
@@ -423,6 +429,14 @@ class CreatePermissionInput:
 class SetRolePermissionsInput:
     roleId: strawberry.ID
     permissionIds: List[strawberry.ID]
+
+@strawberry.input
+class CreateCompanyUserInput:
+    name: str
+    email: str
+    password: str
+    isAdmin: Optional[bool] = False
+    roleCode: Optional[str] = None
 
 # =====================================================================
 # CONVERTIDORES
@@ -515,7 +529,6 @@ def resolver_balance_general(info, fromDate: date, toDate: date) -> GeneralBalan
 OPERACION_CREATE_TX = "createTransaction"
 MAX_LLAVE_IDEMPOTENCIA = 100
 
-
 def hash_cuerpo_movimiento(input: "CreateTransactionInput", monto: Decimal) -> str:
     """SHA-256 determinista del cuerpo del movimiento (JSON con llaves ordenadas)."""
     fecha = input.transactionDate.isoformat() if input.transactionDate else None
@@ -531,7 +544,6 @@ def hash_cuerpo_movimiento(input: "CreateTransactionInput", monto: Decimal) -> s
     texto = json.dumps(cuerpo, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(texto.encode("utf-8")).hexdigest()
 
-
 def buscar_llave(db: Session, company_id: int, llave: str):
     """Registro de la llave para esa empresa y operación, o None."""
     return db.query(models.IdempotencyKey).filter(
@@ -539,7 +551,6 @@ def buscar_llave(db: Session, company_id: int, llave: str):
         models.IdempotencyKey.operation == OPERACION_CREATE_TX,
         models.IdempotencyKey.idempotency_key == llave,
     ).first()
-
 
 def movimiento_de_llave(db: Session, registro, hash_actual: str) -> Transaction:
     """Devuelve el movimiento original si el cuerpo coincide; si no, rechaza."""
@@ -549,7 +560,6 @@ def movimiento_de_llave(db: Session, registro, hash_actual: str) -> Transaction:
         models.Transaction.id == registro.transaction_id
     ).first()
     return transaction_to_gql(t)
-
 
 def exigir_permiso(db: Session, company_user_id: int, codigo: str) -> None:
     asignacion = (
@@ -776,21 +786,56 @@ class Query:
         return [User(id=u.id, name=u.name, email=u.email) for u in db.query(models.User).all()]
 
     @strawberry.field
-    def companyUsers(self, info: strawberry.Info) -> List[CompanyUserType]:
+    def companyUsers(
+        self,
+        info: strawberry.Info,
+        companyId: Optional[strawberry.ID] = None,
+        activeOnly: Optional[bool] = None,
+    ) -> List[CompanyUserType]:
         db = info.context["db"]
         actor = leer_actor(db, info)
         exigir_permiso(db, actor["company_user"].id, "company.users.read")
-        memberships = db.query(models.CompanyUser).all()
-        return [
-            CompanyUserType(
-                id=str(m.id),
-                companyId=str(m.company_id),
-                userId=str(m.user_id),
-                isAdmin=m.is_admin,
-                isActive=m.is_active,
+        if companyId is not None and int(companyId) != int(actor["company_id"]):
+            raise Exception("No puedes acceder a otra empresa")
+
+        q = db.query(models.CompanyUser).filter(
+            models.CompanyUser.company_id == actor["company_id"]
+        )
+        if activeOnly:
+            q = q.filter(models.CompanyUser.is_active == True)
+
+        result = []
+        for m in q.all():
+            cur_role_assoc = (
+                db.query(models.CompanyUserRole)
+                .filter(
+                    models.CompanyUserRole.company_user_id == m.id,
+                    models.CompanyUserRole.is_active == True,
+                )
+                .first()
             )
-            for m in memberships
-        ]
+            role_obj = role_to_gql(cur_role_assoc.role) if cur_role_assoc else None
+            user_obj = (
+                User(id=m.user.id, name=m.user.name, email=m.user.email)
+                if m.user
+                else None
+            )
+            result.append(
+                CompanyUserType(
+                    id=str(m.id),
+                    companyId=str(m.company_id),
+                    userId=str(m.user_id),
+                    isAdmin=m.is_admin,
+                    isActive=m.is_active,
+                    userName=m.user.name if m.user else None,
+                    userEmail=m.user.email if m.user else None,
+                    roleName=cur_role_assoc.role.name if cur_role_assoc else None,
+                    roleCode=cur_role_assoc.role.code if cur_role_assoc else None,
+                    user=user_obj,
+                    role=role_obj,
+                )
+            )
+        return result
 
     @strawberry.field
     def accountBalance(self, info: strawberry.Info, accountId: strawberry.ID,
@@ -1037,7 +1082,6 @@ class Mutation:
         except ValueError as e:
             raise Exception(str(e))
 
-        # Reintento: si la llave ya existe y el cuerpo coincide, devolver el original.
         hash_actual = hash_cuerpo_movimiento(input, monto_validado)
         existente = buscar_llave(db, actor["company_id"], llave)
         if existente is not None:
@@ -1088,7 +1132,7 @@ class Mutation:
         )
         try:
             db.add(db_t)
-            db.flush()  # obtiene db_t.id sin cerrar la transacción
+            db.flush()
             db.add(models.IdempotencyKey(
                 company_id=int(actor["company_id"]),
                 operation=OPERACION_CREATE_TX,
@@ -1096,9 +1140,8 @@ class Mutation:
                 request_hash=hash_actual,
                 transaction_id=db_t.id,
             ))
-            db.commit()  # un solo commit atómico: movimiento + llave
+            db.commit()
         except IntegrityError:
-            # Carrera: otra petición con la misma llave ganó; devolver su resultado.
             db.rollback()
             ganador = buscar_llave(db, actor["company_id"], llave)
             if ganador is None:
@@ -1221,6 +1264,149 @@ class Mutation:
             raise
 
     @strawberry.mutation
+    def createCompanyUser(
+        self, info: strawberry.Info, input: CreateCompanyUserInput
+    ) -> CompanyUserType:
+        db = info.context["db"]
+        actor = leer_actor(db, info)
+        exigir_permiso(db, actor["company_user"].id, "company.users.write")
+
+        if input.isAdmin:
+            raise Exception(
+                "La empresa ya tiene un administrador principal; no se puede crear un segundo."
+            )
+
+        email_norm = input.email.strip().lower()
+        if (
+            db.query(models.User)
+            .filter(func.lower(models.User.email) == email_norm)
+            .first()
+        ):
+            raise Exception("Ya existe un usuario con ese correo.")
+
+        new_user = models.User(
+            name=input.name,
+            email=email_norm,
+            hashed_password=get_password_hash(input.password),
+            is_active=True,
+        )
+        db.add(new_user)
+        db.flush()
+
+        membership = models.CompanyUser(
+            company_id=actor["company_id"],
+            user_id=new_user.id,
+            is_admin=False,
+            is_active=True,
+        )
+        db.add(membership)
+        db.flush()
+
+        role_obj = None
+        role_name = None
+        role_code = None
+        if input.roleCode:
+            role_db = (
+                db.query(models.Role)
+                .filter(
+                    models.Role.code == input.roleCode,
+                    models.Role.is_active == True,
+                )
+                .first()
+            )
+            if role_db is None:
+                raise Exception(f"El rol {input.roleCode} no existe o está inactivo.")
+            db.add(
+                models.CompanyUserRole(
+                    company_user_id=membership.id,
+                    role_id=role_db.id,
+                    is_active=True,
+                )
+            )
+            role_obj = role_to_gql(role_db)
+            role_name = role_db.name
+            role_code = role_db.code
+
+        db.commit()
+        db.refresh(membership)
+        return CompanyUserType(
+            id=str(membership.id),
+            companyId=str(membership.company_id),
+            userId=str(membership.user_id),
+            isAdmin=membership.is_admin,
+            isActive=membership.is_active,
+            userName=new_user.name,
+            userEmail=new_user.email,
+            roleName=role_name,
+            roleCode=role_code,
+            user=User(id=new_user.id, name=new_user.name, email=new_user.email),
+            role=role_obj,
+        )
+
+    @strawberry.mutation
+    def deactivateCompanyUser(
+        self,
+        info: strawberry.Info,
+        id: Optional[strawberry.ID] = None,
+        companyUserId: Optional[strawberry.ID] = None,
+    ) -> CompanyUserType:
+        db = info.context["db"]
+        actor = leer_actor(db, info)
+        exigir_permiso(db, actor["company_user"].id, "company.users.write")
+
+        target_id = companyUserId or id
+        if target_id is None:
+            raise Exception("Se requiere el identificador de la membresía.")
+
+        membership = (
+            db.query(models.CompanyUser)
+            .filter(models.CompanyUser.id == target_id)
+            .first()
+        )
+        if membership is None:
+            raise Exception("Membresía no encontrada.")
+        if int(membership.company_id) != int(actor["company_id"]):
+            raise Exception("No puedes modificar miembros de otra empresa.")
+        if membership.is_admin:
+            raise Exception(
+                "No se puede desactivar al administrador principal."
+            )
+
+        membership.is_active = False
+        db.commit()
+        db.refresh(membership)
+
+        cur_role_assoc = (
+            db.query(models.CompanyUserRole)
+            .filter(
+                models.CompanyUserRole.company_user_id == membership.id,
+                models.CompanyUserRole.is_active == True,
+            )
+            .first()
+        )
+        return CompanyUserType(
+            id=str(membership.id),
+            companyId=str(membership.company_id),
+            userId=str(membership.user_id),
+            isAdmin=membership.is_admin,
+            isActive=membership.is_active,
+            userName=membership.user.name if membership.user else None,
+            userEmail=membership.user.email if membership.user else None,
+            roleName=cur_role_assoc.role.name if cur_role_assoc else None,
+            roleCode=cur_role_assoc.role.code if cur_role_assoc else None,
+            user=(
+                User(
+                    id=membership.user.id,
+                    name=membership.user.name,
+                    email=membership.user.email,
+                )
+                if membership.user
+                else None
+            ),
+            role=role_to_gql(cur_role_assoc.role) if cur_role_assoc else None,
+        )
+
+    @strawberry.mutation
     def createCompanyAdmin(self, info: strawberry.Info, companyName: str, adminName: str,
                            adminEmail: str, adminPassword: str) -> bool:
         db = info.context["db"]
@@ -1262,7 +1448,7 @@ class Mutation:
 schema = strawberry.Schema(query=Query, mutation=Mutation)
 
 graphql_app = GraphQLRouter(
-    schema, 
+    schema,
     context_getter=get_context
 )
 
