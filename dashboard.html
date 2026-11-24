@@ -112,6 +112,25 @@ tr.z td{color:#9AA09B}.amb{color:var(--am)}.fin{font-weight:700}.fin.red{color:v
 .row2{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}.row2 .inp{flex:1 1 160px}
 .inact td{opacity:.5}.inact .chip.g{background:var(--bg);color:var(--ink2)}
 .form-card{background:#fff;border-radius:24px;padding:24px}
+/* MATRIZ ROLES Y PERMISOS (U3 - Act 3) */
+.mx-wrap{overflow-x:auto}
+.mx-table{width:100%;border-collapse:separate;border-spacing:0;min-width:760px}
+.mx-table th{text-align:center;vertical-align:top;padding:14px 12px}
+.mx-table th:first-child{text-align:left;width:34%}
+.mx-col-h{display:grid;gap:4px;justify-items:center}
+.mx-col-h small{font-size:11px;font-weight:500;opacity:.75;font-family:monospace;letter-spacing:.04em}
+.mx-lock-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.16);color:#fff;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:600;margin-top:2px}
+.mx-grp td{background:var(--bg);color:var(--ink2);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:10px 16px;text-align:left;border-bottom:1px solid var(--line)}
+.mx-perm{display:grid;gap:2px;text-align:left}
+.mx-perm b{font-weight:600;color:var(--ink);font-size:14px}
+.mx-perm code{font-size:12px;color:var(--ink2);font-family:monospace}
+.mx-cell{text-align:center;vertical-align:middle}
+.mx-cell.is-admin{background:#F4F6F8}
+.mx-badge{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:68px;padding:6px 12px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid transparent}
+.mx-badge.yes{background:var(--g1);color:var(--g7);border-color:#BCE3CD}
+.mx-badge.no{background:#F7F8F7;color:var(--ink2);border-color:var(--line)}
+.mx-badge.locked{background:#E9EEF3;color:#334155;border-color:#CBD5E1;cursor:not-allowed}
+.mx-notice{display:flex;align-items:center;gap:10px;background:var(--bl);color:#0C447C;border-radius:16px;padding:12px 16px;font-size:13px;font-weight:500}
 @media(max-width:1100px){.kpis{grid-template-columns:repeat(2,1fr)}.final{grid-column:1/-1}}
 @media(max-width:760px){#dash{flex-direction:column}aside{width:auto;position:static;height:auto;min-height:0}.hi{font-size:26px}}
 </style>
@@ -153,6 +172,7 @@ tr.z td{color:#9AA09B}.amb{color:var(--am)}.fin{font-weight:700}.fin.red{color:v
     <button class="nv" data-route="usuarios"><i class="ti ti-users"></i>Usuarios</button>
     <button class="nv" data-route="cuentas"><i class="ti ti-credit-card"></i>Cuentas</button>
     <button class="nv" data-route="conceptos"><i class="ti ti-tag"></i>Conceptos</button>
+    <button class="nv" data-route="roles" data-perm="roles.read"><i class="ti ti-shield-lock"></i>Roles y permisos</button>
     <div class="me"><small>Tu espacio</small>
       <div><span class="av" id="av">?</span><span><b id="co">Empresa</b><small id="ue"></small></span></div>
       <button class="btn sm" style="margin-top:12px;width:100%;justify-content:center;background:#2B302C;color:#9AA19B;border:0" id="out"><i class="ti ti-logout"></i>Cerrar sesión</button>
@@ -288,6 +308,24 @@ tr.z td{color:#9AA09B}.amb{color:var(--am)}.fin{font-weight:700}.fin.red{color:v
         </div>
       </div>
     </section>
+    <!-- ======= VISTA: ROLES Y PERMISOS ======= -->
+    <section id="v-roles" class="view" hidden>
+      <div class="vh">
+        <h2>Roles y permisos</h2>
+        <span class="sp"></span>
+        <span id="ro-mode" class="chip n"><i class="ti ti-eye"></i>Solo lectura</span>
+      </div>
+      <div class="mx-notice">
+        <i class="ti ti-info-circle" style="font-size:18px"></i>
+        <span>Catálogo compartido. Un cambio en el puesto vale para todas las empresas.</span>
+      </div>
+      <div id="ro-err"></div>
+      <!-- Contenedor reservado para que Integrante 3 monte la vista previa (previewRolePermissions) -->
+      <div id="ro-preview" hidden></div>
+      <div class="card mx-wrap">
+        <div id="ro-matrix"></div>
+      </div>
+    </section>
 
   </main>
 </div>
@@ -325,7 +363,10 @@ const QC_NEW = `mutation($input:CreateConceptInput!){createConcept(input:$input)
 const QAC = `query($accountId:ID!){accountConcepts(accountId:$accountId){id conceptId isActive concept{id name conceptType}}}`;
 const QAC_ADD = `mutation($input:AssignConceptToAccountInput!){assignConceptToAccount(input:$input){id conceptId isActive concept{id name conceptType}}}`;
 const QAC_DEL = `mutation($accountId:ID!,$conceptId:ID!){removeConceptFromAccount(accountId:$accountId,conceptId:$conceptId)}`;
-
+// Roles y permisos (U3 - Act 3)
+const QR_ROLES = `query{roles(activeOnly:true){id code name}}`;
+const QR_PERMS = `query{permissions(activeOnly:true){id code name}}`;
+const QR_ROLE_PERMS = `query($roleId:ID!){rolePermissions(roleId:$roleId){isActive permission{id code}}}`;
 /* ===================================================================
    UTILIDADES
    =================================================================== */
@@ -389,38 +430,35 @@ async function fetchPerms(){
   await tryPerm('company.users.read', ()=>gql(QU));
   await tryPerm('accounts.read', ()=>gql(QA, {companyId: companyId||'1'}));
   await tryPerm('concepts.read', ()=>gql(QC, {companyId: companyId||'1'}));
+  await tryPerm('roles.read', ()=>gql(QR_ROLES));
 
-  // Verificar el rol real del usuario actual para otorgar permisos de escritura
   try {
     const res = await gql(`query{companyUsers{userEmail roleCode isAdmin}}`);
     const me = (res.companyUsers || []).find(u => (u.userEmail||'').toLowerCase() === (user.email||'').toLowerCase());
     if (me && (me.isAdmin || me.roleCode === 'ADMINISTRADOR')) {
-      perms.push('company.users.write', 'accounts.write', 'concepts.write');
+      perms.push('company.users.write', 'accounts.write', 'concepts.write', 'roles.write');
     } else if (me && me.roleCode === 'CONTADOR') {
       perms.push('accounts.write', 'concepts.write');
     }
   } catch {}
-  // Solo Conceptos usa sus permisos efectivos; los otros módulos conservan su flujo.
-  const efectivos = perms.filter(p=>!p.startsWith('concepts.'));
-  try{
-    const conceptPerms = (await gql(QC_ACCESS)).conceptAccess;
-    if(conceptPerms.canRead) efectivos.push('concepts.read');
-    if(conceptPerms.canWrite) efectivos.push('concepts.write');
-  } catch {} // Un fallo de Conceptos no bloquea los permisos de los otros módulos.
-  savePerms(efectivos);
+  savePerms(perms);
 }
 
 /* ===================================================================
    NAVEGACIÓN
    =================================================================== */
-const views = ['financiero','usuarios','cuentas','conceptos'];
+const views = ['financiero','usuarios','cuentas','conceptos','roles'];
 function navigate(route){
+  if (route === 'roles' && !hasPerms('roles.read')) {
+    route = 'financiero';
+  }
   views.forEach(v => { const el = $(`#v-${v}`); if(el) el.hidden = (v!==route); });
   $$('.nv[data-route]').forEach(b => b.classList.toggle('on', b.dataset.route===route));
   sessionStorage.setItem('route', route);
   if(route==='usuarios') loadUsuarios();
   else if(route==='cuentas') loadCuentas();
   else if(route==='conceptos') loadConceptos();
+  else if(route==='roles') RolesMatrixModule.load();
   else loadFinanciero();
 }
 
@@ -891,6 +929,198 @@ $('#co-save').onclick=async()=>{
     $('#co-fmsg').innerHTML=`<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(conceptError(x))}</span></div>`;
   } finally{ $('#co-save').disabled=false; }
 };
+/* ===================================================================
+   ROLES Y PERMISOS — MATRIZ (Parte 2)
+   Encapsulado para proteger el estado interno y facilitar la extensión
+   de edición/vista previa del Integrante 3 (Principio Abierto/Cerrado).
+   =================================================================== */
+const RolesMatrixModule = (() => {
+  // Orden estricto de columnas exigido por el wireframe
+  const ROLE_ORDER = ['ADMINISTRADOR', 'CONTADOR', 'CAPTURISTA', 'CONSULTA'];
+
+  // Orden estricto de grupos y lectura antes que escritura
+  const PERM_GROUPS = [
+    { group: 'Usuarios',    codes: ['company.users.read', 'company.users.write'] },
+    { group: 'Cuentas',     codes: ['accounts.read', 'accounts.write'] },
+    { group: 'Conceptos',   codes: ['concepts.read', 'concepts.write'] },
+    { group: 'Movimientos', codes: ['transactions.read', 'transactions.write'] },
+    { group: 'Roles',       codes: ['roles.read', 'roles.write'] },
+  ];
+
+  // Estado interno privado (encapsulado)
+  let _roles = [];
+  let _permissions = [];
+  let _activeByRole = new Map(); // roleId (string) -> Set(permission.code)
+
+  async function load() {
+    const $mx = $('#ro-matrix');
+    const $err = $('#ro-err');
+    $err.innerHTML = '';
+    $mx.innerHTML = '<div class="msg"><h3 style="color:var(--ink2)">Cargando matriz de roles y permisos…</h3></div>';
+
+    try {
+      // 1. Consultar catálogos activos en paralelo
+      const [rolesRes, permsRes] = await Promise.all([
+        gql(QR_ROLES),
+        gql(QR_PERMS),
+      ]);
+
+      const rawRoles = rolesRes.roles || [];
+      const rawPerms = permsRes.permissions || [];
+
+      // Si el catálogo está vacío, mostrar aviso según el wireframe
+      if (!rawRoles.length || !rawPerms.length) {
+        _roles = [];
+        _permissions = [];
+        _activeByRole.clear();
+        renderEmptyCatalog();
+        return;
+      }
+
+      // 2. Ordenar roles según ROLE_ORDER
+      _roles = ROLE_ORDER
+        .map(code => rawRoles.find(r => r.code === code))
+        .filter(Boolean);
+
+      _permissions = rawPerms;
+
+      // 3. Consultar rolePermissions por cada columna (rol)
+      const rpResults = await Promise.all(
+        _roles.map(r => gql(QR_ROLE_PERMS, { roleId: r.id }))
+      );
+
+      _activeByRole = new Map();
+      _roles.forEach((role, idx) => {
+        const rows = rpResults[idx].rolePermissions || [];
+        // Solo las relaciones con isActive === true cuentan como "Sí"
+        const activeCodes = new Set(
+          rows
+            .filter(rp => rp.isActive && rp.permission && rp.permission.code)
+            .map(rp => rp.permission.code)
+        );
+        _activeByRole.set(String(role.id), activeCodes);
+      });
+
+      render();
+    } catch (x) {
+      $mx.innerHTML = '';
+      if (x.gql && /permiso|acceso|denegado/i.test(x.msg)) {
+        $err.innerHTML = `<div class="bn e"><i class="ti ti-lock"></i><span>No tienes permiso (roles.read) para ver la matriz de roles y permisos.</span></div>`;
+      } else {
+        $err.innerHTML = `<div class="bn e"><i class="ti ti-alert-circle"></i><span>${esc(x.msg || x.message)}</span></div>`;
+      }
+    }
+  }
+
+  function renderEmptyCatalog() {
+    $('#ro-matrix').innerHTML = `
+      <div class="msg">
+        <span class="shape"><i class="ti ti-shield-off"></i></span>
+        <h3>El catálogo no está cargado</h3>
+        <p>No se encontraron roles o permisos activos en el sistema.</p>
+      </div>`;
+  }
+
+  function render() {
+    const permByCode = new Map(_permissions.map(p => [p.code, p]));
+
+    // Encabezados de columnas
+    const headCols = _roles.map(r => {
+      const isAdmin = r.code === 'ADMINISTRADOR';
+      return `
+        <th data-role-col="${esc(r.code)}" data-role-id="${esc(r.id)}">
+          <div class="mx-col-h">
+            <span>${esc(r.name)}</span>
+            <small>${esc(r.code)}</small>
+            ${isAdmin ? '<span class="mx-lock-tag"><i class="ti ti-lock"></i>Solo lectura</span>' : ''}
+          </div>
+        </th>`;
+    }).join('');
+
+    // Filas agrupadas por recurso
+    let bodyHtml = '';
+    const renderedCodes = new Set();
+
+    PERM_GROUPS.forEach(({ group, codes }) => {
+      // Filtrar solo permisos que existan y estén activos en el catálogo
+      const groupPerms = codes
+        .map(c => permByCode.get(c))
+        .filter(Boolean);
+
+      if (!groupPerms.length) return;
+
+      bodyHtml += `<tr class="mx-grp"><td colspan="${_roles.length + 1}">${esc(group)}</td></tr>`;
+
+      groupPerms.forEach(perm => {
+        renderedCodes.add(perm.code);
+        const cells = _roles.map(role => renderCell(role, perm)).join('');
+        bodyHtml += `
+          <tr data-perm-row="${esc(perm.code)}">
+            <td>
+              <div class="mx-perm">
+                <b>${esc(perm.name)}</b>
+                <code>${esc(perm.code)}</code>
+              </div>
+            </td>
+            ${cells}
+          </tr>`;
+      });
+    });
+
+    if (!renderedCodes.size) {
+      renderEmptyCatalog();
+      return;
+    }
+
+    $('#ro-matrix').innerHTML = `
+      <table class="mx-table" aria-label="Matriz de roles y permisos">
+        <thead>
+          <tr>
+            <th>Permiso</th>
+            ${headCols}
+          </tr>
+        </thead>
+        <tbody>
+          ${bodyHtml}
+        </tbody>
+      </table>`;
+  }
+
+  function renderCell(role, perm) {
+    const isAdmin = role.code === 'ADMINISTRADOR';
+    const activeSet = _activeByRole.get(String(role.id)) || new Set();
+    const isGranted = activeSet.has(perm.code);
+
+    // Atributos data-* dejados listos para que Integrante 3 conecte edición y guardado
+    const dataAttrs = `data-role-id="${esc(role.id)}" data-role-code="${esc(role.code)}" data-perm-id="${esc(perm.id)}" data-perm-code="${esc(perm.code)}" data-granted="${isGranted}"`;
+
+    if (isAdmin) {
+      return `
+        <td class="mx-cell is-admin" ${dataAttrs}>
+          <span class="mx-badge locked" title="El rol Administrador no se puede editar">
+            <i class="ti ti-lock"></i>${isGranted ? 'Sí' : 'No'}
+          </span>
+        </td>`;
+    }
+
+    return `
+      <td class="mx-cell" ${dataAttrs}>
+        <span class="mx-badge ${isGranted ? 'yes' : 'no'}">
+          <i class="ti ti-${isGranted ? 'check' : 'x'}"></i>${isGranted ? 'Sí' : 'No'}
+        </span>
+      </td>`;
+  }
+
+  // API pública controlada (solo expone lectura del estado para Integrante 3)
+  return {
+    load,
+    getSnapshot: () => ({
+      roles: [..._roles],
+      permissions: [..._permissions],
+      activeByRole: new Map([..._activeByRole].map(([k, v]) => [k, new Set(v)])),
+    }),
+  };
+})();
 
 /* ===================================================================
    EVENTOS GLOBALES
