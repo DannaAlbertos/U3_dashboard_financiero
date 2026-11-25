@@ -596,7 +596,9 @@ def exigir_permisos_balance(db: Session, company_user_id: int) -> None:
     exigir_permiso(db, company_user_id, "accounts.read")
     exigir_permiso(db, company_user_id, "transactions.read")
 
-def aplicar_permisos_rol(db: Session, role_id, permission_ids, antes_commit=None):
+def aplicar_permisos_rol(db: Session, role_id, permission_ids, antes_commit=None,
+                         solo_vista_previa=False):
+    # solo_vista_previa=True calcula las diferencias sin escribir nada en la BD.
     try:
         ids = [int(value) for value in permission_ids]
         role_id = int(role_id)
@@ -627,23 +629,32 @@ def aplicar_permisos_rol(db: Session, role_id, permission_ids, antes_commit=None
         for permiso in permisos:
             relacion = por_id.get(permiso.id)
             if relacion is None:
-                db.add(models.RolePermission(
-                    role_id=role.id, permission_id=permiso.id, is_active=True
-                ))
+                if not solo_vista_previa:
+                    db.add(models.RolePermission(
+                        role_id=role.id, permission_id=permiso.id, is_active=True
+                    ))
                 activated.append(permiso)
             elif not relacion.is_active:
-                relacion.is_active = True
+                if not solo_vista_previa:
+                    relacion.is_active = True
                 activated.append(permiso)
             else:
                 unchanged.append(permiso)
         for relacion in relaciones:
             if relacion.is_active and relacion.permission_id not in deseados:
-                relacion.is_active = False
+                if not solo_vista_previa:
+                    relacion.is_active = False
                 deactivated.append(relacion.permission)
         activated.sort(key=lambda p: p.code)
         deactivated.sort(key=lambda p: p.code)
         unchanged.sort(key=lambda p: p.code)
         changed = bool(activated or deactivated)
+        if solo_vista_previa:
+            return {
+                "role": role, "activated": activated,
+                "deactivated": deactivated, "unchanged": unchanged,
+                "final_count": len(ids), "changed": changed,
+            }
         db.flush()
         if antes_commit is not None:
             antes_commit()
@@ -779,6 +790,46 @@ class Query:
         if activeOnly:
             q = q.filter(models.Permission.is_active == True)
         return [permission_to_gql(p) for p in q.order_by(models.Permission.id).all()]
+
+    @strawberry.field
+    def myPermissions(self, info: strawberry.Info) -> List[Permission]:
+        """Permisos activos del rol actual de quien consulta (según su JWT)."""
+        db = info.context["db"]
+        actor = leer_actor(db, info)
+        asignacion = db.query(models.CompanyUserRole).filter(
+            models.CompanyUserRole.company_user_id == actor["company_user"].id,
+            models.CompanyUserRole.is_active.is_(True),
+        ).first()
+        if asignacion is None:
+            return []
+        permisos = (
+            db.query(models.Permission)
+            .join(models.RolePermission, models.RolePermission.permission_id == models.Permission.id)
+            .filter(
+                models.RolePermission.role_id == asignacion.role_id,
+                models.RolePermission.is_active.is_(True),
+                models.Permission.is_active.is_(True),
+            )
+            .order_by(models.Permission.id)
+            .all()
+        )
+        return [permission_to_gql(p) for p in permisos]
+
+    @strawberry.field
+    def previewRolePermissions(self, info: strawberry.Info, roleId: strawberry.ID,
+                               permissionIds: List[strawberry.ID]) -> RolePermissionUpdate:
+        """Vista previa: qué se activaría/desactivaría. No modifica la base de datos."""
+        db = info.context["db"]
+        actor = leer_actor(db, info)
+        exigir_permiso(db, actor["company_user"].id, "roles.read")
+        r = aplicar_permisos_rol(db, roleId, permissionIds, solo_vista_previa=True)
+        return RolePermissionUpdate(
+            role=role_to_gql(r["role"]),
+            activated=[permission_to_gql(p) for p in r["activated"]],
+            deactivated=[permission_to_gql(p) for p in r["deactivated"]],
+            unchanged=[permission_to_gql(p) for p in r["unchanged"]],
+            finalCount=r["final_count"], changed=r["changed"],
+        )
 
     @strawberry.field
     def rolePermissions(self, info: strawberry.Info, roleId: strawberry.ID) -> List[RolePermissionType]:
