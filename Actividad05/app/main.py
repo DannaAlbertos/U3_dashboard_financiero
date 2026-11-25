@@ -397,7 +397,13 @@ class RolePermissionUpdate:
     finalCount: int
     changed: bool
 
-
+@strawberry.type
+class RolePermissionPreview:
+    toActivate: List[Permission]
+    toDeactivate: List[Permission]
+    unchanged: List[Permission]
+    finalCount: int
+    
 def aplicar_permisos_rol(db: Session, role_id, permission_ids, antes_commit=None):
     # Persona 3: operación completa y atómica de permisos.
     try:
