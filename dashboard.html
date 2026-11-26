@@ -187,7 +187,7 @@ tr.z td{color:#9AA09B}.amb{color:var(--am)}.fin{font-weight:700}.fin.red{color:v
     <div class="sec">Financiero</div>
     <button class="nv on" data-route="financiero"><i class="ti ti-layout-dashboard"></i>Dashboard financiero</button>
     <div class="sec">Administración</div>
-    <button class="nv" data-route="usuarios"><i class="ti ti-users"></i>Usuarios</button>
+    <button class="nv" data-route="usuarios" data-perm="company.users.read"><i class="ti ti-users"></i>Usuarios</button>
     <button class="nv" data-route="cuentas"><i class="ti ti-credit-card"></i>Cuentas</button>
     <button class="nv" data-route="conceptos"><i class="ti ti-tag"></i>Conceptos</button>
     <button class="nv" data-route="roles" data-perm="roles.read"><i class="ti ti-shield-lock"></i>Roles y permisos</button>
@@ -366,9 +366,11 @@ const QL_SIGNUP = `mutation($company:String!,$name:String!,$email:String!,$passw
 const QB = `query($from:Date!,$to:Date!){generalBalance(fromDate:$from,toDate:$to){companyId currency fromDate toDate openingBalance totalIncome totalExpense profit closingBalance isInRed accountsInRed accounts{accountId accountName isActive openingBalance totalIncome totalExpense profit closingBalance isInRed}}}`;
 
 // Usuarios — companyUsers devuelve userName, userEmail, roleName, isAdmin, isActive
-const QU = `query{companyUsers{id userId isAdmin isActive userName userEmail roleName}}`;
+const QU = `query{companyUsers{id userId isAdmin isActive userName userEmail roleName role{id code name}}}`;
 const QU_NEW = `mutation($input:CreateCompanyUserInput!){createCompanyUser(input:$input){id userName userEmail isAdmin isActive roleName}}`;
 const QU_DEL = `mutation($id:ID!){deactivateCompanyUser(id:$id){id isActive}}`;
+// El contrato vigente devuelve Boolean: el puesto confirmado se recarga con QU.
+const QU_ASSIGN_ROLE = `mutation($companyUserId:ID!,$roleId:ID!){assignRole(companyUserId:$companyUserId,roleId:$roleId)}`;
 
 // Cuentas
 const QA = `query($companyId:ID!){accounts(companyId:$companyId){id name accountType bankName clabe cardLastDigits isActive}}`;
@@ -436,47 +438,27 @@ async function gql(query, variables){
   return j.data;
 }
 
-/* Después del login queremos cargar los permisos del usuario.
-   El backend no tiene query de "mis permisos" pero podemos
-   intentar varias queries y ver cuáles dan error.
-   Como workaround sencillo: intentamos cargar companyUsers;
-   si falla → no tiene company.users.read; igual con accounts, concepts. */
+/* Los permisos efectivos vienen del servidor; ante un error se ocultan controles. */
 async function fetchPerms(){
-  // Permisos reales del rol actual (lee la BD en cada llamada; refleja cambios hechos en la matriz).
   try {
     const mine = await gql(QP_MY);
-    savePerms((mine.myPermissions || []).map(x => x.code));
-    return;
-  } catch (e) { /* backend sin myPermissions: se usa el método anterior */ }
-  const user = getUser();
-  const companyId = getCompanyId();
-  const perms = [];
-  const tryPerm = async(permCode, testFn) => {
-    try{ await testFn(); perms.push(permCode); } catch{}
-  };
-  await tryPerm('company.users.read', ()=>gql(QU));
-  await tryPerm('accounts.read', ()=>gql(QA, {companyId: companyId||'1'}));
-  await tryPerm('concepts.read', ()=>gql(QC, {companyId: companyId||'1'}));
-  await tryPerm('roles.read', ()=>gql(QR_ROLES));
-
-  try {
-    const res = await gql(`query{companyUsers{userEmail roleCode isAdmin}}`);
-    const me = (res.companyUsers || []).find(u => (u.userEmail||'').toLowerCase() === (user.email||'').toLowerCase());
-    if (me && (me.isAdmin || me.roleCode === 'ADMINISTRADOR')) {
-      perms.push('company.users.write', 'accounts.write', 'concepts.write', 'roles.write');
-    } else if (me && me.roleCode === 'CONTADOR') {
-      perms.push('accounts.write', 'concepts.write');
-    }
-  } catch {}
-  savePerms(perms);
+    if(!Array.isArray(mine?.myPermissions)) throw new Error('No se pudieron consultar los permisos.');
+    savePerms(mine.myPermissions.map(x => x.code));
+  } catch(e) {
+    savePerms([]);
+    throw e;
+  }
 }
 
 /* ===================================================================
    NAVEGACIÓN
    =================================================================== */
 const views = ['financiero','usuarios','cuentas','conceptos','roles'];
-function navigate(route){
-  if (route === 'roles' && !hasPerms('roles.read')) {
+async function navigate(route){
+  if(getToken()) await fetchPerms().catch(()=>{});
+  applyPermVisibility($('#dash'));
+  if ((route === 'roles' && !hasPerms('roles.read')) ||
+      (route === 'usuarios' && !hasPerms('company.users.read'))) {
     route = 'financiero';
   }
   views.forEach(v => { const el = $(`#v-${v}`); if(el) el.hidden = (v!==route); });
@@ -507,7 +489,7 @@ function logout(msg){
 async function start(){
   const u = getUser();
   if(!u.name){ return logout('La sesión guardada no es válida.'); }
-  // Refresca los permisos reales del rol en cada carga (si falla, usa los guardados)
+  // Refresca los permisos reales; si falla, fetchPerms vacía la caché.
   if(getToken()) await fetchPerms().catch(()=>{});
   loadPerms();
   const initials = (u.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -587,16 +569,31 @@ $('#go').onclick = loadFinanciero;
    USUARIOS
    =================================================================== */
 let _usuarios = [];
+let _rolesAsignables = [];
+let _asignandoRol = false;
+let _usuariosCarga = 0;
 
 async function loadUsuarios(){
+  const carga = ++_usuariosCarga;
+  const token = getToken();
   $('#us-list').innerHTML = '<div class="msg"><i class="ti ti-refresh bi" style="animation:spin 1s linear infinite"></i><h3>Cargando…</h3></div>';
   $('#us-err').innerHTML='';
   try{
-    const data = await gql(QU);
+    const [data, catalogo] = await Promise.all([
+      gql(QU),
+      hasPerms('roles.write') ? gql(QR_ROLES) : Promise.resolve({roles:[]}),
+    ]);
+    if(carga !== _usuariosCarga || token !== getToken()) return;
     _usuarios = data.companyUsers || [];
+    const orden = ['ADMINISTRADOR','CONTADOR','CAPTURISTA','CONSULTA'];
+    _rolesAsignables = (catalogo.roles || []).slice().sort((a,b) => {
+      const pos = r => orden.includes(r.code) ? orden.indexOf(r.code) : orden.length;
+      return pos(a)-pos(b) || a.name.localeCompare(b.name);
+    });
     renderUsuarios();
     renderUserSums();
   } catch(x){
+    if(carga !== _usuariosCarga || token !== getToken()) return;
     $('#us-list').innerHTML='';
     if(x.gql && /permiso|acceso|denegado|membresía/i.test(x.msg)){
       $('#us-err').innerHTML=`<div class="bn e"><i class="ti ti-lock"></i><span>Sin permiso para ver usuarios.</span></div>`;
@@ -605,6 +602,64 @@ async function loadUsuarios(){
     }
   }
   applyPermVisibility($('#v-usuarios'));
+}
+
+function controlRol(u){
+  const puesto = u.roleName ? `<span class="chip n">${esc(u.roleName)}</span>`
+    : '<span style="color:var(--ink2);font-size:13px">Sin rol</span>';
+  if(!hasPerms('roles.write') || !u.isActive || !_rolesAsignables.length) return puesto;
+  const actual = String(u.role?.id || '');
+  const disponible = _rolesAsignables.some(r => String(r.id) === actual);
+  const opciones = (!disponible ? '<option value="" selected disabled>Selecciona un rol</option>' : '') +
+    _rolesAsignables.map(r => `<option value="${esc(r.id)}"${String(r.id)===actual?' selected':''}>${esc(r.name)}</option>`).join('');
+  return `${puesto}<div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+    <select class="inp" data-role-select="${esc(u.id)}" aria-label="Rol de ${esc(u.userName)}"${_asignandoRol?' disabled':''}>${opciones}</select>
+    <button class="btn sm line-btn" data-role-save="${esc(u.id)}" disabled>Guardar</button></div>`;
+}
+
+async function guardarRol(uid, roleId){
+  if(_asignandoRol || !hasPerms('roles.write')) return;
+  const usuario = _usuarios.find(u => String(u.id) === String(uid));
+  if(!usuario || !usuario.isActive || !roleId || String(usuario.role?.id || '') === String(roleId)) return;
+  if(!_rolesAsignables.some(r => String(r.id) === String(roleId))) return;
+  const token = getToken();
+  _asignandoRol = true;
+  _usuariosCarga++;
+  renderUsuarios();
+  $('#us-err').innerHTML = '<div class="bn i"><span>Guardando puesto…</span></div>';
+  let guardado = false;
+  try {
+    const data = await gql(QU_ASSIGN_ROLE, {companyUserId:String(uid), roleId:String(roleId)});
+    if(data?.assignRole !== true) throw new Error('El servidor no confirmó la asignación.');
+    guardado = true;
+    if(token !== getToken()) return;
+    // No se infiere el nuevo puesto: se lee el estado persistido en el servidor.
+    await fetchPerms();
+    applyPermVisibility($('#dash'));
+    if(!hasPerms('company.users.read')) {
+      _usuarios = [];
+      return;
+    }
+    const dataUsuarios = await gql(QU);
+    if(token !== getToken()) return;
+    _usuariosCarga++;
+    if(!Array.isArray(dataUsuarios?.companyUsers)) throw new Error('Respuesta de usuarios incompleta.');
+    _usuarios = dataUsuarios.companyUsers;
+    renderUserSums();
+    $('#us-err').innerHTML = '<div class="bn o"><i class="ti ti-circle-check"></i><span>Puesto actualizado.</span></div>';
+  } catch(x) {
+    if(token !== getToken()) return;
+    await fetchPerms().catch(()=>{});
+    if(token !== getToken()) return;
+    $('#us-err').innerHTML = `<div class="bn e"><i class="ti ti-alert-circle"></i><span>${guardado?'El puesto se guardó, pero no se pudo actualizar la tabla. Vuelve a abrir Usuarios. ':''}${esc(x.msg||x.message)}</span></div>`;
+  } finally {
+    _asignandoRol = false;
+    if(token === getToken()) {
+      applyPermVisibility($('#dash'));
+      renderUsuarios();
+      if(!hasPerms('company.users.read')) navigate('financiero');
+    }
+  }
 }
 
 function renderUserSums(){
@@ -637,12 +692,22 @@ function renderUsuarios(){
     <tr class="${u.isActive?'':'inact'}">
       <td><div class="ac"><span class="av" style="font-size:12px">${esc((u.userName||'?')[0].toUpperCase())}</span>${esc(u.userName||'—')}</div></td>
       <td class="l">${esc(u.userEmail||'—')}</td>
-      <td class="l">${u.roleName?`<span class="chip n">${esc(u.roleName)}</span>`:'<span style="color:var(--ink2);font-size:13px">Sin rol</span>'}</td>
+      <td class="l">${controlRol(u)}</td>
       <td class="l">${u.isAdmin?'<span class="chip g"><i class="ti ti-star"></i>Sí</span>':'No'}</td>
       <td class="l"><span class="chip ${u.isActive?'g':'n'}">${u.isActive?'Activo':'Inactivo'}</span></td>
       <td class="l">${puedeEscribir&&u.isActive&&!u.isAdmin?`<button class="btn sm line-btn" data-uid="${esc(u.id)}" data-deact>Desactivar</button>`:''}</td>
     </tr>`).join('');
   $('#us-list').innerHTML=`<table><thead><tr><th>Nombre</th><th class="l">Correo</th><th class="l">Rol</th><th class="l">Administrador</th><th class="l">Estado</th><th class="l">Acción</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+  $('#us-list').querySelectorAll('[data-role-select]').forEach(select => {
+    const uid = select.dataset.roleSelect;
+    const btn = [...$('#us-list').querySelectorAll('[data-role-save]')].find(b => b.dataset.roleSave === uid);
+    select.onchange = () => {
+      const usuario = _usuarios.find(u => String(u.id) === uid);
+      btn.disabled = _asignandoRol || !select.value || select.value === String(usuario?.role?.id || '');
+    };
+    btn.onclick = () => guardarRol(uid, select.value);
+  });
 
   // Eventos desactivar
   $('#us-list').querySelectorAll('[data-deact]').forEach(btn => {
@@ -658,6 +723,24 @@ function renderUsuarios(){
     };
   });
 }
+
+// Otra sesión puede cambiar nuestro puesto. No descartar borradores de la matriz.
+async function refreshSessionPermissions(){
+  const token = getToken();
+  if(!token || _asignandoRol) return;
+  const anteriores = [...userPerms].sort().join(',');
+  await fetchPerms().catch(()=>{});
+  if(token !== getToken()) return;
+  applyPermVisibility($('#dash'));
+  const route = sessionStorage.getItem('route') || 'financiero';
+  if((route==='usuarios' && !hasPerms('company.users.read')) ||
+     (route==='roles' && !hasPerms('roles.read'))) return navigate('financiero');
+  if(anteriores !== [...userPerms].sort().join(',')) {
+    if(route==='usuarios') await loadUsuarios();
+    if(route==='roles') RolesMatrixModule.refreshAccess();
+  }
+}
+window.addEventListener('focus', refreshSessionPermissions);
 
 // Búsqueda y filtro
 $('#us-q').oninput = renderUsuarios;
@@ -1285,6 +1368,7 @@ const RolesMatrixModule = (() => {
   // API pública controlada
   return {
     load,
+    refreshAccess: () => { setModeChip(); render(); },
     getSnapshot: () => ({
       roles: [..._roles],
       draft: new Map([..._draft].map(([k, v]) => [k, new Set(v)])),

@@ -767,7 +767,11 @@ class Query:
     def roles(self, info: strawberry.Info, activeOnly: Optional[bool] = None) -> List[Role]:
         db = info.context["db"]
         actor = leer_actor(db, info)
-        exigir_permiso(db, actor["company_user"].id, "roles.read")
+        # Quien asigna puestos necesita el catálogo, aunque no pueda leer la matriz.
+        try:
+            exigir_permiso(db, actor["company_user"].id, "roles.read")
+        except Exception:
+            exigir_permiso(db, actor["company_user"].id, "roles.write")
         q = db.query(models.Role)
         if activeOnly:
             q = q.filter(models.Role.is_active == True)
@@ -1326,16 +1330,16 @@ class Mutation:
         if not role.is_active:
             raise Exception("El rol está inactivo")
         try:
+            # Escribir antes de consultar la relación destino serializa las
+            # asignaciones concurrentes en SQLite y evita dejar dos roles activos.
+            db.query(models.CompanyUserRole).filter(
+                models.CompanyUserRole.company_user_id == company_user.id,
+                models.CompanyUserRole.is_active.is_(True),
+            ).update({models.CompanyUserRole.is_active: False}, synchronize_session="fetch")
             assignment = db.query(models.CompanyUserRole).filter(
                 models.CompanyUserRole.company_user_id == company_user.id,
                 models.CompanyUserRole.role_id == role.id,
             ).first()
-            active_assignments = db.query(models.CompanyUserRole).filter(
-                models.CompanyUserRole.company_user_id == company_user.id,
-                models.CompanyUserRole.is_active == True,
-            ).all()
-            for current in active_assignments:
-                current.is_active = False
             if assignment:
                 assignment.is_active = True
             else:

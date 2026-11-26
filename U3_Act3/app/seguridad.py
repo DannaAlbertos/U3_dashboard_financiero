@@ -57,6 +57,10 @@ def leer_actor(db_session, info):
     
     if not company_user:
         raise Exception("El usuario no cuenta con una membresía activa en esta empresa.")
+    if not company_user.user or not company_user.user.is_active:
+        raise Exception("Usuario inactivo o inexistente.")
+    if not company_user.company or not company_user.company.is_active:
+        raise Exception("La empresa está inactiva.")
         
     user_role = db_session.query(CompanyUserRole).filter_by(
         company_user_id=company_user.id,
@@ -65,6 +69,8 @@ def leer_actor(db_session, info):
     
     if not user_role:
         raise Exception("El usuario no tiene un rol activo asignado.")
+    if not user_role.role or not user_role.role.is_active:
+        raise Exception("El rol asignado está inactivo.")
         
     return {
         "company_user": company_user,
